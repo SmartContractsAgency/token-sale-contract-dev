@@ -21,12 +21,12 @@ pragma solidity ^0.4.10;
 /// @author Bezalel Lim <bezalel@artstockx.com>
 /// @dev The token distribution at the requested block number can be snapshotable.
 ///   The token balances of all accounts at snapshotted block number are reserved and can be referenced at any time.
-///   This snapshot feature will allow token build based on SnapshotableToken to be simply cloneable and upgradable without
+///   This snapshot feature will allow SnapshotableToken-based tokens to be simply cloneable and upgradable without
 ///   affecting the original token distribution.
-/// @dev It is inspired by MiniMe token(https://github.com/Giveth/minime), but instead of making all the snapshot for
-///   every block number at which a token transfer transaction occurs, only the requested snapshot is made.
-///   So this is more efficient implementation less bloating smart contract storage.
-/// @dev It is ERC20/ERC223 compliant which allows more efficient token transfer to smart contracts.
+/// @dev It is inspired by MiniMe token(https://github.com/Giveth/minime), but instead of making all the snapshots for
+///   every block number at which any token transfer transaction occurs, only the requested snapshot is made.
+///   So this is more efficient implementation less-bloating smart contract storage.
+/// @dev It is ERC20/ERC223 compliant which allows more efficient and secure token transfer to smart contracts.
 ///   https://github.com/ethereum/EIPs/issues/20
 ///   https://github.com/ethereum/EIPs/issues/223
 
