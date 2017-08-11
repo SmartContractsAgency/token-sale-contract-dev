@@ -93,8 +93,8 @@ contract SnapshotableToken is Controlled {
     /// @dev `Checkpoint` is the structure that attaches a block number to a
     ///  given value, the block number attached is the one that last changed the value
     struct Checkpoint {
-        // `fromBlock` is the block number that the value was generated from
-        uint128 fromBlock;
+        // `blockNum` is the block number that the value was generated from
+        uint128 blockNum;
         // `value` is the amount of tokens at a specific block number
         uint128 value;
     }
@@ -111,7 +111,7 @@ contract SnapshotableToken is Controlled {
 
     // `parentToken` is the Token address that was cloned to produce this token;
     //  it will be 0x0 for a token that was not cloned
-    SnapshotableToken public parentToken;
+    address public parentToken;
 
     // `parentSnapshotBlock` is the block number from the Parent Token that was
     //  used to determine the initial distribution of the Clone Token
@@ -176,14 +176,18 @@ contract SnapshotableToken is Controlled {
         name = _tokenName;                                 // Set the name
         decimals = _decimalUnits;                          // Set the decimals
         symbol = _tokenSymbol;                             // Set the symbol
-        parentToken = SnapshotableToken(_parentToken);
+        if (_parentToken != 0) {
+            require(SnapshotableToken(_parentToken).isSnapshotBlock(_parentSnapshotBlock));
+        }
+        parentToken = _parentToken;
         parentSnapshotBlock = _parentSnapshotBlock;
-        require(_parentToken != 0 && !parentToken.isSnapshotBlock(parentSnapshotBlock));
         lastSnapshotBlock = 0;
         transfersEnabled = _transfersEnabled;
         creationBlock = block.number;
     }
 
+    /// @notice snapshot token distribution at current block number
+    /// @return true if snapshot is successful
     function snapshot() returns (bool success) {
         uint128 blockNumber = uint128(block.number);
         require(lastSnapshotBlock < blockNumber);
@@ -294,17 +298,15 @@ contract SnapshotableToken is Controlled {
     /// @return True if the transfer was successful
     function transferFromTo(address _from, address _to, uint256 _value, bytes _data) internal returns (bool) {
 
-        require(parentSnapshotBlock < block.number);
+        require((parentSnapshotBlock < block.number) && (_value != 0));
 
-        // Do not allow transfer to 0x0 or the token contract itself
+        // Do not allow transfer from/to 0x0 or the token contract itself
         require((_from != 0) && (_to != 0) && (_to != address(this)));
-
-        if (_value == 0) { return true; }
 
         // If the amount being transfered is more than the balance of the
         //  account the transfer returns false
-        var previousBalanceFrom = balanceOfAt(_from, block.number);
-        if (previousBalanceFrom < _value) {
+        var previousBalanceFrom = balanceOfAt(_from, block.number); // guarantees that previousBalanceFrom is in unsigned 128bit range
+        if (previousBalanceFrom < _value) { // guarantees that _value is in unsigned 128bit range
             return false;
         }
 
@@ -314,13 +316,13 @@ contract SnapshotableToken is Controlled {
         }
 
         // First update the balance checkpoints with the new value for the address sending the tokens
-        updateBalanceAtNow(_from, previousBalanceFrom - _value);
+        updateBalanceAtNow(_from, previousBalanceFrom - _value); // previousBalanceFrom - _value : positive 128 bit integer and no overflow
 
         // Then update the balance array with the new value for the address
         //  receiving the tokens
-        var previousBalanceTo = balanceOfAt(_to, block.number);
-        uint256 newBalanceTo = add256(previousBalanceTo, _value);
-        updateBalanceAtNow(_to, newBalanceTo);
+        var previousBalanceTo = balanceOfAt(_to, block.number); // guarantees that previousBalanceTo is in unsigned 128bit range
+        uint256 newBalanceTo = add256(previousBalanceTo, _value); // can be overflowed over 128 bit
+        updateBalanceAtNow(_to, newBalanceTo); // but, 128bit overflow is checked in `updateBalanceAtNow`
 
         if (isContract(_to)) {
             IERC223TokenReceiver receiver = IERC223TokenReceiver(_to);
@@ -385,9 +387,9 @@ contract SnapshotableToken is Controlled {
         //  requires that the `parentToken.balanceOfAt` be queried at the
         //  genesis block for that token as this contains initial balance of
         //  this token
-        if ((balances[_owner].length == 0) || (balances[_owner][0].fromBlock > block)) {
-            if (address(parentToken) != 0) {
-                return parentToken.balanceOfAt(_owner, min256(_blockNumber, parentSnapshotBlock));
+        if ((balances[_owner].length == 0) || (balances[_owner][0].blockNum > block)) {
+            if (parentToken != 0) {
+                return SnapshotableToken(parentToken).balanceOfAt(_owner, min256(_blockNumber, parentSnapshotBlock));
             } else {
                 // Has no parent
                 return 0;
@@ -506,10 +508,10 @@ contract SnapshotableToken is Controlled {
         uint128 block = cast128(_block);
 
         // Shortcut for the actual value
-        if (block >= checkpoints[checkpoints.length - 1].fromBlock) {
+        if (block >= checkpoints[checkpoints.length - 1].blockNum) {
             return checkpoints[checkpoints.length - 1].value;
         }
-        if (block < checkpoints[0].fromBlock) {
+        if (block < checkpoints[0].blockNum) {
             return 0;
         }
 
@@ -518,7 +520,7 @@ contract SnapshotableToken is Controlled {
         uint256 max = checkpoints.length - 1;
         while (max > min) {
             uint256 mid = (max + min + 1) / 2;
-            if (checkpoints[mid].fromBlock <= block) {
+            if (checkpoints[mid].blockNum <= block) {
                 min = mid;
             } else {
                 max = mid - 1;
@@ -536,13 +538,13 @@ contract SnapshotableToken is Controlled {
         if ((checkpoints.length == 0) || (snapshotForLastCheckpoint[_owner] < lastSnapshotBlock)) {
             // new checkpoint array entry (new snapshot was made since last balance update)
             Checkpoint storage newCheckPoint = checkpoints[checkpoints.length++];
-            newCheckPoint.fromBlock =  uint128(block.number);
+            newCheckPoint.blockNum =  uint128(block.number);
             newCheckPoint.value = value;
             snapshotForLastCheckpoint[_owner] = lastSnapshotBlock;
         } else {
             // overwrite last checkpoint
             Checkpoint storage oldCheckPoint = checkpoints[checkpoints.length - 1];
-            newCheckPoint.fromBlock =  uint128(block.number);
+            newCheckPoint.blockNum =  uint128(block.number);
             oldCheckPoint.value = value;
         }
     }
@@ -550,7 +552,7 @@ contract SnapshotableToken is Controlled {
     /// @dev Internal function to determine if an address is a contract
     /// @param _addr The address being queried
     /// @return True if `_addr` is a contract
-    function isContract(address _addr) constant internal returns(bool) {
+    function isContract(address _addr) constant internal returns (bool) {
         uint size;
         if (_addr == 0) return false;
         assembly {
