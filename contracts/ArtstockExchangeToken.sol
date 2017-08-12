@@ -15,6 +15,7 @@ contract ArtstockExchangeToken is SnapshotableDividendableToken {
         18,                     // Decimals
         "ASX",                  // Symbol
         true,                   // Enable transfers
-        _dividendDisburser      // dividend-disburser multisig address
+        _dividendDisburser,     // dividend-disburser multisig address
+        2*365*24*60*60          // Dividend-Deactivate-TimeLimit : 2 years
     ) {}
 }
