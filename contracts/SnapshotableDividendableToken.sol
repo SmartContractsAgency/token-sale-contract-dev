@@ -181,6 +181,10 @@ contract SnapshotableDividendableToken is SnapshotableToken, IERC223TokenReceive
         return dividendTokenList.length;
     }
 
+    function getDividendTokenAddressAtIndex(uint index) constant returns (address) {
+        return dividendTokenList[index];
+    }
+
     function getDividendTokenStatus(address _dividendToken) constant returns (uint256 totalDividendTokenAmount, uint256 totalClaimedDividendTokenAmount) {
         DividendToken storage dividendToken = dividendTokens[_dividendToken];
         totalDividendTokenAmount = uint256(dividendToken.totalDividends);
