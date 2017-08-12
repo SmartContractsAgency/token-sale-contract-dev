@@ -55,4 +55,7 @@ npm-debug.log
 /dist/**
 .webpack.json
 
+# Truffle Build #
+build/*
+
 
