@@ -1,7 +1,7 @@
 pragma solidity ^0.4.10;
 
 /*
-    Copyright 2017, Bezalel Lim, ARTSTOCK EXCHANGE Inc.
+    Copyright 2017, Bezalel Lim, Artstock Exchange Inc.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -18,7 +18,7 @@ pragma solidity ^0.4.10;
  */
 
 /// @title SnapshotableToken Contract
-/// @author Bezalel Lim <bezalel@artstockx.com>
+/// @author Bezalel Lim <bezalel@artstockx.com> <bezalel.dev@gmail.com>
 /// @dev The token distribution at the requested block number can be snapshotable.
 ///   The token balances of all accounts at snapshotted block number are reserved and can be referenced at any time.
 ///   This snapshot feature will allow SnapshotableToken-based tokens to be simply cloneable and upgradable without
@@ -378,7 +378,7 @@ contract SnapshotableToken is Controlled {
     /// @param _owner The address from which the balance will be retrieved
     /// @param _blockNumber The block number when the balance is queried
     /// @return The balance at `_blockNumber`
-    function balanceOfAt(address _owner, uint256 _blockNumber) constant /*internal*/ returns (uint256) {
+    function balanceOfAt(address _owner, uint256 _blockNumber) constant returns (uint256) {
 
         uint128 block = cast128(_blockNumber);
 
