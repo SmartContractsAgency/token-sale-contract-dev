@@ -2,9 +2,9 @@ pragma solidity ^0.4.10;
 
 import "./SnapshotableDividendableToken.sol";
 
-contract ASXToken is SnapshotableDividendableToken {
-    // @dev ASXToken constructor just parametrizes the SnapshotableDividendableToken constructor
-    function ASXToken(
+contract ArtstockExchangeToken is SnapshotableDividendableToken {
+    // @dev ArtstockExchangeToken constructor just parametrizes the SnapshotableDividendableToken constructor
+    function ArtstockExchangeToken(
         address _tokenFactory,
         address _dividendDisburser
     ) SnapshotableDividendableToken(
