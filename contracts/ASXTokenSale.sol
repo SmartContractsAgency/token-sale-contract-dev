@@ -2,7 +2,7 @@ pragma solidity ^0.4.13;
 
 import "./Ownable.sol";     // import OpenZepplin Ownable
 import "./DSMath.sol";      // import DSMath for WAD multiplication/division and min/max
-import "./ASXToken.sol";    // import the ASXToken contract for interaction
+import "./ArtstockExchangeToken.sol";    // import the ASXToken contract for interaction
 
 /*
 * @ title - Artstock Exchange token sale contract
@@ -53,7 +53,7 @@ import "./ASXToken.sol";    // import the ASXToken contract for interaction
     their ASX rewards based on the final price P and their contribution amount in each round.
 
     Once all contribution rounds are completed the ASXTokenSale contract will cede its
-    ASXToken controller position to the 0X0 address.
+    ArtstockExchangeToken controller position to the 0X0 address.
 
 * @dev - inherits from DSMath
 * @dev - DSMath is a safe math lib with WAD division/multiplication handling and min/max. WAD
@@ -65,7 +65,7 @@ contract ASXTokenSale is Ownable, DSMath {
     /* contract init vars and log */
     ASXToken public ASX;                        // the ASX token
     uint public initSupply;                     // the initial/total supply fo ASX (S)
-    address public postSaleController;          // the contract which will be controller for the ASXToken contract after the sale (the postSale controller will enforce the locking period and circuit breakers)
+    address public postSaleController;          // the contract which will be controller for the ArtstockExchangeToken contract after the sale (the postSale controller will enforce the locking period and circuit breakers)
     uint128 public initMinTarget;               // the initial minimum market cap of the total ASX supply (Imin)
     uint128 public initMaxTarget;               // the initial maximum market cap of the total ASX supply (Imax)
     uint128 public basePercentage;              // the base token distribution percentage (a)
@@ -109,7 +109,7 @@ contract ASXTokenSale is Ownable, DSMath {
 
     /*
     * @description - ArtStockSale constructor
-    * @param _initSupply - the initial/total supply of tokens to be minted by the ASXToken contract during the ASXTokenSale contract initialization
+    * @param _initSupply - the initial/total supply of tokens to be minted by the ArtstockExchangeToken contract during the ASXTokenSale contract initialization
     */
     function ASXTokenSale(uint _initSupply, address _postSaleController) {
         require(_initSupply <= 10**38);                 // _initSupply will never exceed 10**38, this ensures safe compatibility with DSMath WAD operations
@@ -359,8 +359,8 @@ contract ASXTokenSale is Ownable, DSMath {
     }
 
     /*
-    * @description - overloaded contribute function to handle incoming proxyPayment calls from the ASXToken contract
-    * @param _contributor - the address of the contributor who sent ETH to the ASXToken contract
+    * @description - overloaded contribute function to handle incoming proxyPayment calls from the ArtstockExchangeToken contract
+    * @param _contributor - the address of the contributor who sent ETH to the ArtstockExchangeToken contract
     * @return true
     */
     function contribute(address _contributor) payable returns (bool success) {
@@ -434,7 +434,7 @@ contract ASXTokenSale is Ownable, DSMath {
     }
 
     /*
-    * @description - function finalize the sale which entails ceding control of the ASXToken contract to the post sale controlling contract
+    * @description - function finalize the sale which entails ceding control of the ArtstockExchangeToken contract to the post sale controlling contract
     * @param _owner - the address that sent the ether to create tokens
     * @return true
     */
@@ -448,7 +448,7 @@ contract ASXTokenSale is Ownable, DSMath {
             totalASXDistributed += round.dist;                          // add the round distribution to the total distribution
         }
         SaleEnd(currentBlock, totalContributions, totalASXDistributed); // log the sale end event
-        ASX.changeController(postSaleController);                       // change ASXToken controller to the post sale controller
+        ASX.changeController(postSaleController);                       // change ArtstockExchangeToken controller to the post sale controller
         return true;
     }
 
@@ -457,13 +457,13 @@ contract ASXTokenSale is Ownable, DSMath {
     * @return true
     */
     function collectFunds() onlyOwner returns (bool success) {
-        assert(address(ASX.controller) == postSaleController);   // assert that the postSaleController contract is the controller of the ASXToken contract
+        assert(address(ASX.controller) == postSaleController);   // assert that the postSaleController contract is the controller of the ArtstockExchangeToken contract
                                                         // ASX.controller can only be set to the postSaleController during saleEnd()
                                                         // fund collection is only available after sale finalization for two reasons:
                                                         // i) to guarantee ETH recycling is impossible during the sale period, and
                                                         // ii) to guarantee that Artstock controlled ASX tokens are always subject to the postSaleController contract locking rules
 
-        uint asxBalance = ASX.balanceOf(address(this)); // get the remaining ASX balance of the ASXToken contract
+        uint asxBalance = ASX.balanceOf(address(this)); // get the remaining ASX balance of the ArtstockExchangeToken contract
 
         ASX.transfer(msg.sender, asxBalance);           //transfer all remaining ASX tokens to the authorized msg.sender
         msg.sender.transfer(this.balance);              // transfer all available ETH to the authorized msg.sender
@@ -483,7 +483,7 @@ contract ASXTokenSale is Ownable, DSMath {
     }
 
     /*
-    * @description - called by the ASXToken contract when a token transfer occurs, no need from controller for permission. All
+    * @description - called by the ArtstockExchangeToken contract when a token transfer occurs, no need from controller for permission. All
         tokens are originally controlled by the ASXTokenSale contract, and once claimed after each round should be freely
         transferable
     * @param _from - the origin of the transfer
@@ -496,7 +496,7 @@ contract ASXTokenSale is Ownable, DSMath {
     }
 
     /*
-    * @description - called by the ASXToken contract when an approve occurs, no need from controller for permission, same
+    * @description - called by the ArtstockExchangeToken contract when an approve occurs, no need from controller for permission, same
         reasoning as onTransfer
     * @param _owner - the address that calls approve()
     * @param _spender - the spender in the approve() call
