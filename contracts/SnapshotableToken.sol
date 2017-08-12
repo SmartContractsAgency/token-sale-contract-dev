@@ -18,7 +18,7 @@ pragma solidity ^0.4.10;
  */
 
 /// @title SnapshotableToken Contract
-/// @author Bezalel Lim <bezalel@artstockx.com> <bezalel.dev@gmail.com>
+/// @author Bezalel Lim <bezalel@artstockx.com>
 /// @dev The token distribution at the requested block number can be snapshotable.
 ///   The token balances of all accounts at snapshotted block number are reserved and can be referenced at any time.
 ///   This snapshot feature will allow SnapshotableToken-based tokens to be simply cloneable and upgradable without
