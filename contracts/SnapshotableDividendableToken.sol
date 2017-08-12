@@ -18,7 +18,7 @@ pragma solidity ^0.4.10;
  */
 
 /// @title SnapshotableDividendableToken Contract
-/// @author Bezalel Lim <bezalel@artstockx.com> <bezalel.dev@gmail.com>
+/// @author Bezalel Lim <bezalel@artstockx.com>
 /// @dev TODO documentation
 
 import "./SnapshotableToken.sol";
@@ -29,14 +29,31 @@ contract IERC20Transfer {
 
 contract SnapshotableDividendableToken is SnapshotableToken, IERC223TokenReceiver {
 
-    // the authorized dividend disburser.
-    // only the `dividendDisburser` account can transfer ERC223 compatible tokens to this 'Dividendable' token contract
-    // as dividend disbursement.
-    address public dividendDisburser;
+    mapping (address => DividendToken) dividendTokens;
+    address[] public dividendTokenList;
+
+    struct DividendToken {
+        // the accumulated total dividend amount of this ERC223 token.
+        // `totalDividendAmount` equals to the sum of `dividendDisbursementHistory.dividendAmount`
+        uint128 totalDividendAmount;
+        uint128 totalClaimedDividendAmount;
+        uint128 lastDeactivatedDividendIndex; // index starting from 1 (0 : there is no deactivated dividend)
+        DividendDisbursement[] dividendDisbursementHistory;
+        mapping(address => DividendClaimStatus) dividendClaims;
+    }
 
     struct DividendDisbursement {
+        uint128 dividendAmount;
+        uint128 claimedAmount;
         uint128 blockNum;
-        uint128 amount;
+        // block timestamp as seconds since unix epoch
+        uint64 timestamp;
+        // after `dividendDeactivateTimeLimit` (e.g. 2 years) from the `timestamp` of the dividend disbursement,
+        // the authorized `dividendDisburser` can take back the remaining dividend amount including
+        // the accumulated tiny rounding errors and the dividends unclaimed for a long time, and deactivate
+        // claiming dividend from this disbursement. `DividendDisbursement` can be deactivated only if all the previous
+        // `DividendDisbursement` in `dividendDisbursementHistory` were already deactivated.
+        bool deactivated;
     }
 
     /// @dev dividend claim status data for each account
@@ -45,15 +62,13 @@ contract SnapshotableDividendableToken is SnapshotableToken, IERC223TokenReceive
         uint128 claimedDividendAmount;
     }
 
-    struct DividendToken {
-        uint128 totalDividends;
-        uint128 totalClaimedDividends;
-        DividendDisbursement[] dividendDisbursementHistory;
-        mapping(address => DividendClaimStatus) dividendClaims;
-    }
+    // the authorized dividend disburser.
+    // only the `dividendDisburser` account can transfer ERC223 compatible tokens to this 'Dividendable' token contract
+    // as dividend disbursement.
+    address public dividendDisburser;
 
-    mapping (address => DividendToken) dividendTokens;
-    address[] public dividendTokenList;
+    /// @dev time-unit: second
+    uint64 public dividendDeactivateTimeLimit;
 
     /// @dev log event that will be fired when new dividend disbursement fund is deposited on this 'Dividendable' token contract
     /// @param _dividendToken the ERC223-compatible token contract address whose tokens are used as dividend disbursement funds
@@ -65,6 +80,7 @@ contract SnapshotableDividendableToken is SnapshotableToken, IERC223TokenReceive
     /// @param _dividendToken TODO
     /// @param _amount TODO
     event ClaimedDividend(address indexed _tokenHolder, address indexed _dividendToken, uint256 _amount);
+    event DividendDisbursementDeactivated(address indexed _dividendToken, uint256 _disbursementIndex, uint256 _remainingAmount);
 
     // @dev SnapshotableDividendableToken constructor
     function SnapshotableDividendableToken(
@@ -75,11 +91,13 @@ contract SnapshotableDividendableToken is SnapshotableToken, IERC223TokenReceive
         uint8 _decimalUnits,
         string _tokenSymbol,
         bool _transfersEnabled,
-        address _dividendDisburser
+        address _dividendDisburser,
+        uint64 _dividendDeactivateTimeLimit
     ) SnapshotableToken(_tokenFactory, _parentToken, _parentSnapshotBlock,
         _tokenName, _decimalUnits, _tokenSymbol, _transfersEnabled) {
 
         dividendDisburser = _dividendDisburser;
+        dividendDeactivateTimeLimit = _dividendDeactivateTimeLimit;
     }
 
     function setDividendDisburser(address _newDisburser)
@@ -103,17 +121,19 @@ contract SnapshotableDividendableToken is SnapshotableToken, IERC223TokenReceive
         uint128 amount = cast128(_value);
 
         DividendToken storage dividendToken = dividendTokens[msg.sender];
-        if (dividendToken.totalDividends == 0) {
+        if (dividendToken.totalDividendAmount == 0) {
             // first time dividend for the current type of dividend token(ERC223, msg.sender),
             // so register to `dividendTokenList`
             dividendTokenList[dividendTokenList.length++] = msg.sender; // appends last entry
         }
-        dividendToken.totalDividends = add128(dividendToken.totalDividends, amount);
-//        dividendToken.unclaimedDividends = add128(dividendToken.unclaimedDividends, amount);
+        dividendToken.totalDividendAmount = add128(dividendToken.totalDividendAmount, amount);
         DividendDisbursement[] storage disbursementHistory = dividendToken.dividendDisbursementHistory;
         DividendDisbursement storage newDividendDisbursementEntry = disbursementHistory[disbursementHistory.length++];
+        newDividendDisbursementEntry.dividendAmount = amount;
+        //newDividendDisbursementEntry.claimedAmount = 0; // default zero
         newDividendDisbursementEntry.blockNum = uint128(block.number); // distinct block number is guaranteed by `snapshot()`
-        newDividendDisbursementEntry.amount = amount;
+        newDividendDisbursementEntry.timestamp = uint64(block.timestamp);
+        //newDividendDisbursementEntry.deactivated = false; // default zero
 
         // snapshot the token distribution at current block number for dividend-claiming method to retrieve the exact
         // token balance of the requested account and total supply of this token at the dividend block.
@@ -132,14 +152,17 @@ contract SnapshotableDividendableToken is SnapshotableToken, IERC223TokenReceive
     ///    to additionally claim or re-claim the remaining unclaimed dividend amount.
     /// @return The claimed amount of `_dividendToken` token. this amount of token is transferred
     ///    to the requesting account(the token holder of this 'Dividendable' token)
-    function claimDividend(address _dividendToken, uint _maxDisbursementCheckCount) returns (uint256) {
+    function claimDividend(address _dividendToken, uint _maxDisbursementCheckCount) returns (uint) {
 
         DividendToken storage dividendToken = dividendTokens[_dividendToken];
-        if (dividendToken.totalDividends == 0) { return 0; }
+        if (dividendToken.totalDividendAmount == 0) { return 0; }
 
         DividendClaimStatus storage claimStatus = dividendToken.dividendClaims[msg.sender];
         uint startIdx = claimStatus.nextDividendIndexToClaim;
-        uint endIdx = dividendToken.dividendDisbursementHistory.length;
+        if (startIdx < dividendToken.lastDeactivatedDividendIndex) {
+            startIdx = dividendToken.lastDeactivatedDividendIndex; // lastDeactivatedDividendIndex is index number starting from 1
+        }
+        uint endIdx = dividendToken.dividendDisbursementHistory.length; // endIdx : (last 'to-be-claimed' dividend index) + 1
 
         if (startIdx >= endIdx) { return 0; }
 
@@ -147,34 +170,75 @@ contract SnapshotableDividendableToken is SnapshotableToken, IERC223TokenReceive
             endIdx = startIdx + _maxDisbursementCheckCount;
         }
 
-        uint256 claimed = accumulateDividendTokenAmountToClaim(dividendToken, startIdx, endIdx);
+        uint256 totalClaimed = accumulateDividendTokenAmountToClaim(dividendToken, startIdx, endIdx, true /*update 'claimed' balances*/);
+
         claimStatus.nextDividendIndexToClaim = uint128(endIdx);
 
-        if (claimed == 0) { return 0; }
+        if (totalClaimed == 0) { return 0; }
 
-        uint128 hClaimed = uint128(claimed); // no overflow
-        claimStatus.claimedDividendAmount += hClaimed; // no overflow always capped by uint128 dividendToken.totalDividends
-        dividendToken.totalClaimedDividends += hClaimed;  // no overflow always capped by uint128 dividendToken.totalDividends
+        uint128 hTotalClaimed = uint128(totalClaimed); // half-word(128bit), no overflow
+        claimStatus.claimedDividendAmount += hTotalClaimed; // no overflow always capped by uint128 dividendToken.totalDividendAmount
+        dividendToken.totalClaimedDividendAmount += hTotalClaimed;  // no overflow always capped by uint128 dividendToken.totalDividendAmount
 
         // TODO check if transfer tx should be separate method
-        require(IERC20Transfer(_dividendToken).transfer(msg.sender, claimed));
+        require(IERC20Transfer(_dividendToken).transfer(msg.sender, totalClaimed));
 
-        ClaimedDividend(msg.sender, _dividendToken, claimed);
-        return claimed;
+        ClaimedDividend(msg.sender, _dividendToken, totalClaimed);
+        return totalClaimed;
     }
 
-    function accumulateDividendTokenAmountToClaim(DividendToken storage _dividendTokenData, uint _startIndex, uint _endIndex) constant internal returns (uint256) {
-        uint256 amountToClaim = 0;
+    /// @param _disbursementIndex index starting from 1
+    function deactivateDividendDisbursement(address _dividendToken, uint _disbursementIndex)
+        only(dividendDisburser)
+        returns (uint) {
+
+        DividendToken storage dividendToken = dividendTokens[_dividendToken];
+        if (dividendToken.totalDividendAmount == 0) { return 0; }
+
+        DividendDisbursement storage disbursement = dividendToken.dividendDisbursementHistory[_disbursementIndex - 1];
+        require(block.timestamp > uint256(disbursement.timestamp + dividendDeactivateTimeLimit));
+
+        if (_disbursementIndex > 1) {
+            // `DividendDisbursement` can be deactivated only if
+            // all the previous `DividendDisbursement` in `dividendDisbursementHistory` were already deactivated.
+            require(dividendToken.dividendDisbursementHistory[_disbursementIndex - 2].deactivated == true);
+        }
+
+        uint256 remaining = 0;
+        if (disbursement.dividendAmount > disbursement.claimedAmount) {
+            remaining = uint256(disbursement.dividendAmount - disbursement.claimedAmount);
+        }
+        disbursement.deactivated = true;
+        dividendToken.lastDeactivatedDividendIndex = uint128(_disbursementIndex); // no overflow
+
+        if (remaining > 0) {
+            // the authorized `dividendDisburser` can take back the remaining dividend amount including
+            // the accumulated tiny rounding errors and the dividends unclaimed for a long time
+            require(IERC20Transfer(_dividendToken).transfer(msg.sender, remaining));
+        }
+
+        DividendDisbursementDeactivated(_dividendToken, _disbursementIndex, remaining);
+        return remaining;
+    }
+
+    function accumulateDividendTokenAmountToClaim(
+        DividendToken storage _dividendTokenData, uint _startIndex, uint _endIndex, bool _doClaim
+    ) internal returns (uint256) {
+
+        uint256 total = 0;
         DividendDisbursement[] storage disbursementHistory = _dividendTokenData.dividendDisbursementHistory;
         for (uint i = _startIndex; i < _endIndex; i++) {
             DividendDisbursement storage disbursement = disbursementHistory[i];
             uint256 blockNumAt = uint256(disbursement.blockNum);
             uint256 balanceAtDividendBlock = balanceOfAt(msg.sender, blockNumAt); // balanceAt is in unsigned 128bit range
             uint256 totalSupplyAtDividendBlock = totalSupplyAt(blockNumAt); // totalSupplyAt is in unsigned 128bit range
-            uint256 dividendToClaim = (disbursement.amount * balanceAtDividendBlock) / totalSupplyAtDividendBlock; // no overflow is guaranteed
-            amountToClaim += dividendToClaim;
+            uint256 dividendToClaim = (disbursement.dividendAmount * balanceAtDividendBlock) / totalSupplyAtDividendBlock; // no overflow is guaranteed
+            if (_doClaim) {
+                disbursement.claimedAmount += uint128(dividendToClaim); // no overflow
+            }
+            total += dividendToClaim; // no overflow
         }
-        return amountToClaim; // amountToClaim is in uint128 range (capped by uint128 dividendToken.totalDividends)
+        return total; // total is in uint128 range (capped by uint128 dividendToken.totalDividendAmount)
     }
 
     function getDividendTokenCount() constant returns (uint256) {
@@ -185,10 +249,13 @@ contract SnapshotableDividendableToken is SnapshotableToken, IERC223TokenReceive
         return dividendTokenList[index];
     }
 
-    function getDividendTokenStatus(address _dividendToken) constant returns (uint256 totalDividendTokenAmount, uint256 totalClaimedDividendTokenAmount) {
+    function getDividendTokenStatus(address _dividendToken) constant
+        returns (uint256 totalDividendTokenAmount, uint256 totalClaimedDividendTokenAmount, uint256 lastDeactivatedDividendIndex) {
+
         DividendToken storage dividendToken = dividendTokens[_dividendToken];
-        totalDividendTokenAmount = uint256(dividendToken.totalDividends);
-        totalClaimedDividendTokenAmount = uint256(dividendToken.totalClaimedDividends);
+        totalDividendTokenAmount = uint256(dividendToken.totalDividendAmount);
+        totalClaimedDividendTokenAmount = uint256(dividendToken.totalClaimedDividendAmount);
+        lastDeactivatedDividendIndex = uint256(dividendToken.lastDeactivatedDividendIndex);
     }
 
     function getDividendClaimStatus(address _dividendToken, address _tokenHolder) constant returns (uint256 claimedDividendTokenAmount, uint256 unclaimedDividendDisbursementCount) {
@@ -204,7 +271,7 @@ contract SnapshotableDividendableToken is SnapshotableToken, IERC223TokenReceive
         uint startIdx = claimStatus.nextDividendIndexToClaim;
         uint endIdx = dividendToken.dividendDisbursementHistory.length;
         if (startIdx >= endIdx) { return 0; }
-        return accumulateDividendTokenAmountToClaim(dividendToken, startIdx, endIdx);
+        return accumulateDividendTokenAmountToClaim(dividendToken, startIdx, endIdx, false /*readonly*/);
     }
 
     modifier only(address x) {
