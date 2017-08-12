@@ -108,6 +108,13 @@ contract SnapshotableDividendableToken is SnapshotableToken, IERC223TokenReceive
         dividendDisburser = _newDisburser;
     }
 
+    function setDividendDeactivateTimeLimit(uint64 _newTimeLimit)
+        only(dividendDisburser)
+        public {
+
+        dividendDeactivateTimeLimit = _newTimeLimit;
+    }
+
     /// @dev ERC223 token receiver interface (a function to handle token transfers that is called
     ///    from token contract when token holder is sending tokens.)
     ///    this token receives ERC223 tokens as dividend disbursement funds that will be distributed to token holders.
