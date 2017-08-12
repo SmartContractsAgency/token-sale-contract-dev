@@ -55,7 +55,5 @@ npm-debug.log
 /dist/**
 .webpack.json
 
-# Ignore the truffle Build folder during development#
-build/
 
 
