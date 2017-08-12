@@ -63,7 +63,7 @@ import "./ArtstockExchangeToken.sol";    // import the ASXToken contract for int
 */
 contract ASXTokenSale is Ownable, DSMath {
     /* contract init vars and log */
-    ASXToken public ASX;                        // the ASX token
+    ArtstockExchangeToken public ASX;           // the ASX token
     uint public initSupply;                     // the initial/total supply fo ASX (S)
     address public postSaleController;          // the contract which will be controller for the ArtstockExchangeToken contract after the sale (the postSale controller will enforce the locking period and circuit breakers)
     uint128 public initMinTarget;               // the initial minimum market cap of the total ASX supply (Imin)
@@ -130,7 +130,7 @@ contract ASXTokenSale is Ownable, DSMath {
     * @return bool - success after successfully completing the initialization
     */
     function initialize(
-        ASXToken _asx,
+        ArtstockExchangeToken _asx,
         uint _initMinTarget,
         uint _initMaxTarget,
         uint _basePercentage,
