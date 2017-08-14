@@ -4,10 +4,8 @@ import "./Ownable.sol";     // import OpenZepplin Ownable
 import "./DSMath.sol";      // import DSMath for WAD multiplication/division and min/max
 import "./ArtstockExchangeToken.sol";    // import the ASXToken contract for interaction
 
-/*
-* @ title - Artstock Exchange token sale contract
-* @ author - Terry Wilkinson [terryw@artstockx.com]
-* @ license -
+/**
+* @license -
     Copyright 2017, Terry Wilkinson, ARTSTOCK EXCHANGE Inc.
 
     This program is free software: you can redistribute it and/or modify
@@ -23,8 +21,9 @@ import "./ArtstockExchangeToken.sol";    // import the ASXToken contract for int
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-* @ description - Upon initialization of this contract, the total supply
-    of ASX tokens will be generated and assigned to the ASXTokenSale contract.
+* @description -
+    Upon initialization of this contract, the total supply of ASX tokens will be
+    generated and assigned to the ASXTokenSale contract.
 
     The ASXTokenSale distribution model is purposefully flexible to allow multiple
     rounds at different discrete times with a variable percentage of the total ASX
@@ -54,14 +53,17 @@ import "./ArtstockExchangeToken.sol";    // import the ASXToken contract for int
 
     Once all contribution rounds are completed the ASXTokenSale contract will cede its
     ArtstockExchangeToken controller position to the 0X0 address.
+*/
 
-* @dev - inherits from DSMath
+/**
+* @title - Artstock Exchange token sale contract
+* @author - Terry Wilkinson [terryw@artstockx.com]
+* @dev - inherits from DSMath (https://github.com/dapphub/ds-math)
 * @dev - DSMath is a safe math lib with WAD division/multiplication handling and min/max. WAD
     calculations require uint128.We have updated the the basic safe math function names to be
     compatible with solc 0.4.13 compilation
-* @ref - https://github.com/dapphub/ds-math
 */
-contract ASXTokenSale is Ownable, DSMath {
+contract ASXTokenSale is Ownable, DSMath, TokenController{
     /* contract init vars and log */
     ArtstockExchangeToken public ASX;           // the ASX token
     uint public initSupply;                     // the initial/total supply fo ASX (S)
@@ -79,7 +81,7 @@ contract ASXTokenSale is Ownable, DSMath {
     /* contribution round vars and logs */
     uint roundCount;                         // track the current round count, max count 3, but rounds are indexed 0-2, (R)
 
-    /*
+    /**
     * @dev - Round is a structure that attaches contribution round information to a given round number
     */
     struct Round {
@@ -94,21 +96,21 @@ contract ASXTokenSale is Ownable, DSMath {
         bool initialized;                       // initialization flag for each round
         bool ended;                             // end flag for each round
         mapping (address => uint128) contrib;   // the total contributed amount for each address in each round
-        mapping (address => bool) claimed;      // claiming flag for when rewards have been claimed by an address in each round
+        mapping (address => uint128) claimed;   // amount of rewards that have been claimed by an address in each round (0 or the total amount)
     }
 
     mapping (uint => Round) public rounds;   // map round number to round information
 
 
-    event RoundInit(uint _roundIndex, uint _allocation, uint _threshold, uint _cap);                                                    // round initialization log event
+    event RoundInit(uint _roundIndex, uint _roundStart, uint _roundEnd, uint _allocation, uint _threshold, uint _cap);                                                    // round initialization log event
     event RoundEnd(uint _roundIndex, uint _endBlock, uint _finalPrice, uint _finalContributionTotal, uint _finalDistribution);          // round end log event
     event Contribution(uint _roundIndex, address _contributor, uint _amount);                                                           // contribution log event
     event Claim(uint _roundIndex, address _claimant, uint _amount);                                                                     // claiming log event
     event SaleEnd(uint _saleEndBlock, uint _totalSaleContributions, uint _totalSaleDistribution);                                       // sale end log event
     event CollectFunds(uint amountETH, uint _amountASX);                                                                                // collect funds log event
 
-    /*
-    * @description - ArtStockSale constructor
+    /**
+    * @dev - ArtStockSale constructor
     * @param _initSupply - the initial/total supply of tokens to be minted by the ArtstockExchangeToken contract during the ASXTokenSale contract initialization
     */
     function ASXTokenSale(uint _initSupply, address _postSaleController) {
@@ -118,8 +120,8 @@ contract ASXTokenSale is Ownable, DSMath {
         postSaleController = _postSaleController;       // set the post sale controller storage var
     }
 
-    /*
-    * @description - initialize function for creating the ASX token supply and setting the contribution model initial parameters
+    /**
+    * @dev - initialize function for creating the ASX token supply and setting the contribution model initial parameters
     * @param _asx - the ASX Token contract object
     * @param _initMinTarget - the initial range minimum target
     * @param _initMaxTarget - the initial range maximum target
@@ -152,8 +154,8 @@ contract ASXTokenSale is Ownable, DSMath {
         ASX = _asx;                                                                     // set the ASX contract variable to the ASX token contract
         ASX.generateTokens(address(this),initSupply);                                   // create ASX equal to initSupply and assign them to the ArtStockSale contract address
 
-        /*
-        * @notice -  the following are cast to uint128 for DSMath compatibility. uint128 allows
+        /**
+        * @dev -  the following are cast to uint128 for DSMath compatibility. uint128 allows
           for 39 decimal positions (at ~ 3.4e+38). The above 'requires' will prevent any overflow
           possibility for uint128 types
         */
@@ -169,37 +171,38 @@ contract ASXTokenSale is Ownable, DSMath {
         return true;                                                                    // return success
     }
 
-    /*
-    * @description - fallback function, any ETH paid is contributed to the current active round, or reverted if no round is active
+    /**
+    * @dev - fallback function, any ETH paid is contributed to the current active round, or reverted if no round is active
     */
     function () payable {
         contribute();   // fallback to contribution
     }
 
-    /*
-    * @description - initialization function for setting the parameters and starting each contribution round
-    * @param _roundLength - the length of the contribution round (in blocks)
+    /**
+    * @dev - initialization function for setting the parameters, start block, and end block of each contribution round
+    * @param _roundStart - the start block of the contribution round
+    * @param _roundEnd - the end block of the contribution round
     * @return success - true after successfully completing the initialization
     */
-    function initializeRound( uint _roundLength) onlyOwner returns (bool success) {
+    function initializeRound( uint _roundStart, uint _roundEnd) onlyOwner returns (bool success) {
         assert(initialized == true);                                        // assert that the ASXTokenSale contract has already been initialized (only relevant for Round 0)
         assert(roundCount < 3);                                             // assert that the maximum number of initialized rounds is 3. roundCount iteration happens at the end of initialization, so roundCount 3 would actually be initializing the 4th round
+        require(_roundStart >= block.number);                               // require the round start block to be greater than (or equal to) the current block number
+        require(_roundEnd > _roundStart);                                   // require the round end block to be greater than the round start block
 
         Round storage round = rounds[roundCount];                           // get the virtually initialized Round struct for this roundCount
 
         assert(round.initialized == false);                                 // assert that this round has not already been initialized
 
         uint currentRnd = currentRound();
-        uint currentRoundStart = block.number;                              // set the current round start block to the current block number
 
         if(roundCount > 0){                                                 // for all rounds beyond Round 0, check that there is no possible round overlap
-            Round storage prevRound = rounds[currentRnd];                 // iteration happens at the end of initialization, so currentRound is proper since it == roundCount - 1 for rounds above 0
-            assert(currentRoundStart > uint256(prevRound.end));             // assert that the current round start block is greater than the previous round end block
+            Round storage prevRound = rounds[currentRnd];                   // iteration happens at the end of initialization, so currentRound is proper since it == roundCount - 1 for rounds above 0
+            assert(_roundStart > uint256(prevRound.end));                   // assert that the current round start block is greater than the previous round end block
         }
 
-        round.start = cast(currentRoundStart);                              // set the roundStart of the current round to the current block number
-        uint currentRoundEnd = dsadd(currentRoundStart, _roundLength);      // calculate the round end block based on the _roundLength param
-        round.end = cast(currentRoundEnd);                                  // set the roundEnd of the current round to currentRoundEnd
+        round.start = cast(_roundStart);                                    // set the roundStart of the current round to the current block number
+        round.end = cast(_roundEnd);                                        // set the roundEnd of the current round to currentRoundEnd
 
         round.avail = calcAvail();                                          // calculate the maximum available ASX for this round
         round.threshold = calcThreshold();                                  // calculate the contribution threshold for this round
@@ -207,12 +210,12 @@ contract ASXTokenSale is Ownable, DSMath {
 
         round.initialized = true;                                           // set the round initialization flag to true
         roundCount += 1;                                                    // iterate the round count
-        RoundInit(currentRnd, uint(round.avail), uint(round.threshold), uint(round.cap));    // log the round initialization event
+        RoundInit(currentRnd, _roundStart, _roundEnd, uint(round.avail), uint(round.threshold), uint(round.cap));    // log the round initialization event
         return true;                                                        // return success
     }
 
-    /*
-    * @description - helper function to calculate the maximum available tokens allocated for distribution in the current round
+    /**
+    * @dev - helper function to calculate the maximum available tokens allocated for distribution in the current round
     * @return avail - the calculated available token allocation
     */
     function calcAvail() private returns (uint128 avail) {
@@ -229,8 +232,8 @@ contract ASXTokenSale is Ownable, DSMath {
         }
     }
 
-    /*
-    * @description - helper function to calculate the contribution threshold in the current round, the contribution threshold is the contribution point where all available tokens will be distributed
+    /**
+    * @dev - helper function to calculate the contribution threshold in the current round, the contribution threshold is the contribution point where all available tokens will be distributed
     * @return threshold - the calculated threshold amount
     */
     function calcThreshold() private returns (uint128 threshold) {
@@ -247,8 +250,8 @@ contract ASXTokenSale is Ownable, DSMath {
         }
     }
 
-    /*
-     * @description - helper function to calculate the contribution cap in the current round
+    /**
+     * @dev - helper function to calculate the contribution cap in the current round
      * @return cap - the calculated cap amount
      */
     function calcCap() private returns (uint128 cap) {
@@ -265,8 +268,8 @@ contract ASXTokenSale is Ownable, DSMath {
         }
     }
 
-    /*
-     * @description - helper function to calculate the relevant amounts for calcThreshold() and calcCap()
+    /**
+     * @dev - helper function to calculate the relevant amounts for calcThreshold() and calcCap()
      * @param _targetType - for choosing the relevant target, false when calculating for a threshold target, true when calculating for a cap target
      * @param _calcType - both calcThreshold() and calcCap() need to compare previous round contribution based calculations and threshold based calculations, false for previous round threshold calcs and true for previous round contrib calcs
      * @return calc - the calculated amount
@@ -305,8 +308,8 @@ contract ASXTokenSale is Ownable, DSMath {
         }
     }
 
-    /*
-    * @description - helper function to get the current round count. roundCount is iterated when a round is initialized so the true index of the current round is roundCount - 1 for all rounds above 0
+    /**
+    * @dev - helper function to get the current round count. roundCount is iterated when a round is initialized so the true index of the current round is roundCount - 1 for all rounds above 0
     * @param _roundCount - the round to check cumulative percentage for
     * @return percent - the current round cumulative percent coefficient
     */
@@ -315,8 +318,8 @@ contract ASXTokenSale is Ownable, DSMath {
         return percent;                                                                 // return percent coefficient
     }
 
-    /*
-    * @description - helper function to get the current round count. roundCount is iterated when a round is initialized so the true index of the current round is roundCount - 1 for all rounds above 0
+    /**
+    * @dev - helper function to get the current round count. roundCount is iterated when a round is initialized so the true index of the current round is roundCount - 1 for all rounds above 0
     * @return index - the current round index
     */
     function currentRound() constant returns (uint index) {
@@ -329,8 +332,8 @@ contract ASXTokenSale is Ownable, DSMath {
         }
     }
 
-    /*
-    * @description - allows the contributor to contribute to a current active round. If no round is active transaction will be reverted
+    /**
+    * @dev - allows the contributor to contribute to a current active round. If no round is active transaction will be reverted
     */
     function contribute() payable returns (bool success) {
         uint currentBlock = block.number;                                                               // set the current block number
@@ -358,8 +361,8 @@ contract ASXTokenSale is Ownable, DSMath {
         return true;                                                                                    // return success
     }
 
-    /*
-    * @description - overloaded contribute function to handle incoming proxyPayment calls from the ArtstockExchangeToken contract
+    /**
+    * @dev - overloaded contribute function to handle incoming proxyPayment calls from the ArtstockExchangeToken contract
     * @param _contributor - the address of the contributor who sent ETH to the ArtstockExchangeToken contract
     * @return true
     */
@@ -389,8 +392,8 @@ contract ASXTokenSale is Ownable, DSMath {
         return true;                                                                                    // return success
     }
 
-    /*
-    * @description - a function for contributors to claim ASX rewards from previous rounds
+    /**
+    * @dev - a function for contributors to claim ASX rewards from previous rounds
     * @param _round - the round to claim ASX from
     * @return true
     */
@@ -409,7 +412,7 @@ contract ASXTokenSale is Ownable, DSMath {
             }
         }
 
-        if (round.claimed[msg.sender] || round.totalContrib == 0) {             // check if msg.sender already claimed or there is no contribution this round
+        if (round.claimed[msg.sender] != 0 || round.totalContrib == 0) {        // check if msg.sender already claimed or there is no contribution this round
             return true;                                                        // return (not revert) because we could be iterating with claimAll
         }
 
@@ -417,15 +420,15 @@ contract ASXTokenSale is Ownable, DSMath {
         uint128 price = round.price;                                            // get the final price of this round
         uint128 reward = wmul(price, userTotal);                                // multiply contribution times the price to get the contributor's reward
 
-        round.claimed[msg.sender] = true;                                       // change claimed flag of the sender (for this round) to true
+        round.claimed[msg.sender] = reward;                                     // change claimed amount of the sender (for this round) to reward
         ASX.transfer(msg.sender, uint(reward));                                 // transfer claimed reward to the sender
 
         Claim(_round, msg.sender, uint(reward));                                // log the claim event
         return true;                                                            // return success
     }
 
-    /*
-    * @description - function to iterate over each round until the current one and try to claim rewards
+    /**
+    * @dev - function to iterate over each round until the current one and try to claim rewards
     */
     function claimAll() {
         for (uint i = 0; i < roundCount; i++) { // iterate over each round; roundCount is one greater than the round index so this will iterate up to the current round. Current round claims will throw if the current block is not after the round end block.
@@ -433,16 +436,15 @@ contract ASXTokenSale is Ownable, DSMath {
         }
     }
 
-    /*
-    * @description - function finalize the sale which entails ceding control of the ArtstockExchangeToken contract to the post sale controlling contract
-    * @param _owner - the address that sent the ether to create tokens
+    /**
+    * @dev - function finalize the sale which entails ceding control of the ArtstockExchangeToken contract to the post sale controlling contract
     * @return true
     */
     function saleEnd() private returns (bool success) {
         uint128 totalContributions;                                     // total contributions
         uint128 totalASXDistributed;                                    // total ASX distributed
         uint currentBlock = block.number;
-        for (uint128 i = 0; i < roundCount; i++) {                      // iterate over each round; roundCount is one greater than the round index, so this will iterate up to the current final round.
+        for (uint i = 0; i < roundCount; i++) {                      // iterate over each round; roundCount is one greater than the round index, so this will iterate up to the current final round.
             Round storage round = rounds[i];                            // get round i info
             totalContributions += round.totalContrib;                   // add round contributions to the total contributions
             totalASXDistributed += round.dist;                          // add the round distribution to the total distribution
@@ -452,8 +454,8 @@ contract ASXTokenSale is Ownable, DSMath {
         return true;
     }
 
-    /*
-    * @description - Artstock Exchange will collect all remaining ASX and contributed ETH after the last contribution period has ended
+    /**
+    * @dev - Artstock Exchange will collect all remaining ASX and contributed ETH after the last contribution period has ended
     * @return true
     */
     function collectFunds() onlyOwner returns (bool success) {
@@ -472,8 +474,8 @@ contract ASXTokenSale is Ownable, DSMath {
         return true;                                    // return success
     }
 
-    /*
-    * @description - called when _owner sends ether to the SnapshotableToken contract. Calls contribute, contribute will throw if there is no current active contribution round
+    /**
+    * @dev - called when _owner sends ether to the SnapshotableToken contract. Calls contribute, contribute will throw if there is no current active contribution round
     * @param _owner - the address that sent the ether to create tokens
     * @return true
     */
@@ -482,8 +484,8 @@ contract ASXTokenSale is Ownable, DSMath {
         return true;
     }
 
-    /*
-    * @description - called by the ArtstockExchangeToken contract when a token transfer occurs, no need from controller for permission. All
+    /**
+    * @dev - called by the ArtstockExchangeToken contract when a token transfer occurs, no need from controller for permission. All
         tokens are originally controlled by the ASXTokenSale contract, and once claimed after each round should be freely
         transferable
     * @param _from - the origin of the transfer
@@ -495,16 +497,35 @@ contract ASXTokenSale is Ownable, DSMath {
         return true;
     }
 
-    /*
-    * @description - called by the ArtstockExchangeToken contract when an approve occurs, no need from controller for permission, same
+    /**
+    * @dev - called by the ArtstockExchangeToken contract when an approve occurs, no need from controller for permission, same
         reasoning as onTransfer
     * @param _owner - the address that calls approve()
     * @param _spender - the spender in the approve() call
     * @param _value - the amount in the approve() call
     * @return true
     */
-    function onApprove(address _owner, address _spender, uint _value) returns(bool) {
+    function onApprove(address _owner, address _spender, uint _value) returns (bool) {
         return true;
     }
 
+    /**
+    * @dev - sale info getter function
+    * @param _participant - the address of a sale participant (using 0x0, or a non-participant address, will simply return the general sale information)
+    * @return (Round0, Round1, Round2) - returns any array for each round of the sale
+    */
+    function getSaleInfo(address _participant) returns (uint128[10] Round0, uint128[10] Round1, uint128[10] Round2) {
+
+        for (uint i = 0; i < roundCount; i++) {                         // iterate over each round; roundCount is one greater than the round index, so this will iterate up to the current final round.
+            Round storage round = rounds[i];                            // get round i info
+            if(i == 0) {                                                // add each round info to the appropriate return array
+                Round0 = [round.start, round.end, round.threshold, round.cap, round.avail, round.dist, round.price, round.totalContrib, round.contrib[_participant], round.claimed[_participant]];
+            } else if (i == 1) {
+                Round1 = [round.start, round.end, round.threshold, round.cap, round.avail, round.dist, round.price, round.totalContrib, round.contrib[_participant], round.claimed[_participant]];
+            } else {
+                Round2 = [round.start, round.end, round.threshold, round.cap, round.avail, round.dist, round.price, round.totalContrib, round.contrib[_participant], round.claimed[_participant]];
+            }
+        }
+        return (Round0, Round1, Round2);
+    }
 }
