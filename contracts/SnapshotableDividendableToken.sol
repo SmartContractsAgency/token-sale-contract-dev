@@ -144,7 +144,7 @@ contract SnapshotableDividendableToken is SnapshotableToken, IERC223TokenReceive
 
         // snapshot the token distribution at current block number for dividend-claiming method to retrieve the exact
         // token balance of the requested account and total supply of this token at the dividend block.
-        snapshot();
+        require(snapshot());
 
         NewDividend(msg.sender, _value, _data);
     }
