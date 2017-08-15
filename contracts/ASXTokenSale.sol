@@ -72,11 +72,12 @@ contract ASXTokenSale is Ownable, DSMath, TokenController{
     uint128 public initMaxTarget;               // the initial maximum market cap of the total ASX supply (Imax)
     uint128 public basePercentage;              // the base token distribution percentage (a)
     uint128 public perRoundPercentage;          // additional token distribution percentage per round (b)
-    uint128 public thresholdCoefficient;        // the % change in threshold size from one round to the next (t)
+    uint128 public thresholdCoefficient1;       // the % change in threshold from Round 0 to Round 1 the next (t1)
+    uint128 public thresholdCoefficient2;       // the % change in threshold from Round 1 to Round 2 the next (t1)
     uint128 public capCoefficient;              // the % of change in maximum contribution cap size from one round to the next (m)
     bool initialized;                           // ASXTokenSale contract initialization flag
 
-    event Init(uint _initMinTarget, uint _initMaxTarget, uint _basePercentage, uint _perRoundPercentage, uint _thresholdCoefficient, uint _capCoefficient); // ASXToken contract initialization log event
+    event Init(uint _initMinTarget, uint _initMaxTarget, uint _basePercentage, uint _perRoundPercentage, uint _thresholdCoefficient1, uint _thresholdCoefficient2, uint _capCoefficient); // ASXToken contract initialization log event
 
     /* contribution round vars and logs */
     uint roundCount;                         // track the current round count, max count 3, but rounds are indexed 0-2, (R)
@@ -127,7 +128,8 @@ contract ASXTokenSale is Ownable, DSMath, TokenController{
     * @param _initMaxTarget - the initial range maximum target
     * @param _basePercentage - the base token distribution percentage in WAD format (so something less than 10**18)
     * @param _perRoundPercentage - additional token distribution percentage per round in WAD format (less than 10**18)
-    * @param _thresholdCoefficient - used to calculate the % change in threshold size from one round to the next in WAD format (10**18 is 100%)
+    * @param _thresholdCoefficient1 - used to calculate the % change in threshold from Round 0 to Round 1, WAD formatted (10**18 is 100%)
+    * @param _thresholdCoefficient2 - used to calculate the % change in threshold from Round 1 to Round 2, WAD formatted (10**18 is 100%)
     * @param _capCoefficient - used to calculate the % change in maximum contribution cap size from one round to the next in WAD format
     * @return bool - success after successfully completing the initialization
     */
@@ -137,7 +139,8 @@ contract ASXTokenSale is Ownable, DSMath, TokenController{
         uint _initMaxTarget,
         uint _basePercentage,
         uint _perRoundPercentage,
-        uint _thresholdCoefficient,
+        uint _thresholdCoefficient1,
+        uint _thresholdCoefficient2,
         uint _capCoefficient
 
     ) onlyOwner returns (bool success) {
@@ -148,8 +151,9 @@ contract ASXTokenSale is Ownable, DSMath, TokenController{
         require(_initMaxTarget > _initMinTarget && _initMaxTarget < 10**26);            // require the max initial target is greater than the min target but less than the total current actual ETH supply (~ 100M ETH) decimal places
         require(0 < _basePercentage && _basePercentage < 10**18);                       // require that the base percentage is greater than 0 and less than 19 decimal places (10**18 = 100% for WAD calculations)
         require(0 < _perRoundPercentage && _perRoundPercentage < 10**18);               // require that round percentage is greater than 0 and  less than 19 decimal places (10**18 = 100% for WAD calculations)
-        require(_thresholdCoefficient >= 10**18 && _thresholdCoefficient < 10**19);     // require that the threshold coefficient is never above 1000% (it will be much lower than this)
-        require(_capCoefficient > _thresholdCoefficient && _capCoefficient < 10**19);   // require the cap coefficient is greater than the threshold coefficient and less than 1000% (it will be much lower than this)
+        require(_thresholdCoefficient1 >= 10**18);                                      // require that the Round 1 threshold coefficient is greater than (or equal to) 100%
+        require(_thresholdCoefficient2 >= _thresholdCoefficient1);                      // require that the Round 2 threshold coefficient is greater than (or equal to) the Round 0 threshold coefficient
+        require(_capCoefficient > _thresholdCoefficient2 && _capCoefficient < 10**19);  // require the cap coefficient is greater than the Round 2 threshold coefficient and less than 1000% (it will be much lower than this)
 
         ASX = _asx;                                                                     // set the ASX contract variable to the ASX token contract
         ASX.generateTokens(address(this),initSupply);                                   // create ASX equal to initSupply and assign them to the ArtStockSale contract address
@@ -163,11 +167,12 @@ contract ASXTokenSale is Ownable, DSMath, TokenController{
         initMaxTarget = cast(_initMaxTarget);                                           //
         basePercentage = cast(_basePercentage);                                         //
         perRoundPercentage = cast(_perRoundPercentage);                                 //
-        thresholdCoefficient = cast(_thresholdCoefficient);                             //
+        thresholdCoefficient1 = cast(_thresholdCoefficient1);                           //
+        thresholdCoefficient2 = cast(_thresholdCoefficient2);                           //
         capCoefficient = cast(_capCoefficient);                                         //
         initialized = true;                                                             // set the initialized variable to true, preventing any future initializations
 
-        Init(_initMinTarget, _initMaxTarget, _basePercentage, _perRoundPercentage, _thresholdCoefficient, _capCoefficient); // log the ArtStockFund initialize event
+        Init(_initMinTarget, _initMaxTarget, _basePercentage, _perRoundPercentage, _thresholdCoefficient1, _thresholdCoefficient2, _capCoefficient); // log the ArtStockFund initialize event
         return true;                                                                    // return success
     }
 
@@ -221,13 +226,16 @@ contract ASXTokenSale is Ownable, DSMath, TokenController{
     function calcAvail() private returns (uint128 avail) {
         uint128 cumulativeRoundPercent = percentCoefficient(roundCount);            // percent coefficient for the initializing round (p)
         uint128 totalAllocation = wmul(cumulativeRoundPercent, cast(initSupply));   // calculate the maximum available ASX in R0 (A0 = p0*S)
+        Round storage round0 = rounds[0];
         if (roundCount == 0) {                                                      // Round 0 case
             avail = totalAllocation;                                                // in Round 0, available amount is simply totalAllocation
             return avail;
-        } else {                                                                    // cases beyond Round 0
-            uint prevCount = dssub(roundCount, 1);                                  // get previous round count
-            Round storage prevRound = rounds[prevCount];                            // get Round struct for previous round
-            avail = wsub(totalAllocation, prevRound.dist);                          // calculate the maximum available ASX in R1/R2 (A1 = (p1*S)-D0 / A2 = (p2*S)-D1)
+        } else if (roundCount == 1) {                                                // case for Round 1
+            avail = wsub(totalAllocation, round0.dist);                             // calculate the maximum available ASX in R1, A1 = (p1*S)-D0
+            return avail;
+        } else {                                                                    // case for Round 2
+            Round storage round1 = rounds[1];
+            avail = wsub(wsub(totalAllocation, round1.dist), round0.dist);          // calculate the maximum available ASX in R2, A2 = (p2*S)-D1-D0
             return avail;
         }
     }
@@ -282,13 +290,14 @@ contract ASXTokenSale is Ownable, DSMath, TokenController{
         uint prevRnd = dssub(_roundCount, 1);
         uint128 prevRoundPercent = percentCoefficient(prevRnd);
 
-        if(_targetType == false){
-            multiplier = thresholdCoefficient;
-        } else {
-            multiplier = capCoefficient;
-        }
-
         if(_roundCount == 1){
+
+            if(_targetType == false) {
+                multiplier = thresholdCoefficient1;
+            } else {
+                multiplier = capCoefficient;
+            }
+
             if(_calcType == false){
                 calcType = round0.threshold;
             } else {
@@ -296,9 +305,17 @@ contract ASXTokenSale is Ownable, DSMath, TokenController{
             }
             calc = wsub(wmul(currentRoundPercent, wmul(multiplier, wdiv(calcType, prevRoundPercent))), round0.totalContrib); //(p1*t*(T0/p0)))-C0
             return calc;
+
         } else {
             Round storage round1 = rounds[1];
-            if(_calcType == false){
+
+            if(_targetType == false) {
+                multiplier = thresholdCoefficient2;
+            } else {
+                multiplier = capCoefficient;
+            }
+
+            if(_calcType == false) {
                 calcType = round1.threshold;
             } else {
                 calcType = round1.totalContrib;
