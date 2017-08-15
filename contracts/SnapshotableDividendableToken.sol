@@ -323,8 +323,8 @@ contract SnapshotableDividendableToken is SnapshotableToken, IERC223TokenReceive
         for (uint i = _startIndex; i < _endIndex; i++) {
             DividendDisbursement storage disbursement = disbursementHistory[i];
             uint256 blockNumAt = uint256(disbursement.blockNum);
-            uint256 balanceAtDividendBlock = balanceOfAt(msg.sender, blockNumAt); // balanceAt is in uint128 range
-            uint256 totalSupplyAtDividendBlock = totalSupplyAt(blockNumAt); // totalSupplyAt is in uint128 range
+            uint256 balanceAtDividendBlock = balanceOfAtCheckpoint(msg.sender, blockNumAt); // balanceAt is in uint128 range
+            uint256 totalSupplyAtDividendBlock = totalSupplyAtCheckpoint(blockNumAt); // totalSupplyAt is in uint128 range
             uint256 dividendToClaim = (disbursement.dividendAmount * balanceAtDividendBlock) / totalSupplyAtDividendBlock; // no overflow and in uint128 range
             if (_doClaim) {
                 disbursement.claimedAmount += uint128(dividendToClaim); // no overflow

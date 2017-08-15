@@ -103,7 +103,7 @@ contract SnapshotableToken is Controlled {
     // Events
     ////////////////
     event Snapshot(uint256 indexed _blockNumber, uint256 indexed _data);
-    //    event Transfer(address indexed _from, address indexed _to, uint256 _value) // ERC20
+    //    event Transfer(address indexed _from, address indexed _to, uint256 _value) // ERC20 TODO check backward compatibility
     event Transfer(address indexed _from, address indexed _to, uint256 _value, bytes _data); // ERC223
     event Approval(address indexed _owner, address indexed _spender, uint256 _value); // ERC20
     event ClaimedTokens(address indexed _token, address indexed _controller, uint _value);
@@ -244,7 +244,7 @@ contract SnapshotableToken is Controlled {
     /// @param _owner The address that's balance is being requested
     /// @return The balance of `_owner` at the current block
     function balanceOf(address _owner) constant returns (uint256 balance) {
-        return balanceOfAt(_owner, block.number);
+        return balanceOfAtCheckpoint(_owner, block.number);
     }
 
     /// @notice `msg.sender` approves `_spender` to spend `_value` tokens on
@@ -284,7 +284,7 @@ contract SnapshotableToken is Controlled {
     /// @dev This function makes it easy to get the total number of tokens
     /// @return The total number of tokens
     function totalSupply() constant returns (uint256) {
-        return totalSupplyAt(block.number);
+        return totalSupplyAtCheckpoint(block.number);
     }
 
     /// @dev This is the actual transfer function in the token contract, it can only be called by other functions in this contract.
@@ -302,7 +302,7 @@ contract SnapshotableToken is Controlled {
 
         // If the amount being transfered is more than the balance of the
         //  account the transfer returns false
-        var previousBalanceFrom = balanceOfAt(_from, block.number); // guarantees that previousBalanceFrom is in unsigned 128bit range
+        var previousBalanceFrom = balanceOfAtCheckpoint(_from, block.number); // guarantees that previousBalanceFrom is in unsigned 128bit range
         if (previousBalanceFrom < _value) { // guarantees that _value is in unsigned 128bit range
             return false;
         }
@@ -317,7 +317,7 @@ contract SnapshotableToken is Controlled {
 
         // Then update the balance array with the new value for the address
         //  receiving the tokens
-        var previousBalanceTo = balanceOfAt(_to, block.number); // guarantees that previousBalanceTo is in unsigned 128bit range
+        var previousBalanceTo = balanceOfAtCheckpoint(_to, block.number); // guarantees that previousBalanceTo is in unsigned 128bit range
         uint256 newBalanceTo = add256(previousBalanceTo, _value); // can be overflowed over 128 bit
         updateBalanceAtNow(_to, newBalanceTo); // but, 128bit overflow is checked in `updateBalanceAtNow`
 
@@ -364,29 +364,31 @@ contract SnapshotableToken is Controlled {
     /// @return The balance at `_snapshotBlockNumber`
     function balanceOfAtSnapshot(address _owner, uint256 _snapshotBlockNumber) constant returns (uint256) {
         require(isSnapshotBlock(_snapshotBlockNumber));
-        return balanceOfAt(_owner, _snapshotBlockNumber);
+        return balanceOfAtCheckpoint(_owner, _snapshotBlockNumber);
     }
 
     ////////////////
     // Query balance and totalSupply in History
     ////////////////
 
-    /// @dev Queries the balance of `_owner` at a specific `_blockNumber`
+    /// @notice Queries the checkpoint balance of `_owner` at a specific `_blockNumber`.
+    ///   Only the snapshotted block numbers and recent block numbers after last snapshot are guaranteed to return correct value.
+    ///   If requested `_blockNumber`
     /// @param _owner The address from which the balance will be retrieved
     /// @param _blockNumber The block number when the balance is queried
     /// @return The balance at `_blockNumber`
-    function balanceOfAt(address _owner, uint256 _blockNumber) constant returns (uint256) {
+    function balanceOfAtCheckpoint(address _owner, uint256 _blockNumber) constant returns (uint256) {
 
         uint128 block = cast128(_blockNumber);
 
         // These next few lines are used when the balance of the token is
         //  requested before a check point was ever created for this token, it
-        //  requires that the `parentToken.balanceOfAt` be queried at the
+        //  requires that the `parentToken.balanceOfAtCheckpoint` be queried at the
         //  genesis block for that token as this contains initial balance of
         //  this token
         if ((balances[_owner].length == 0) || (balances[_owner][0].blockNum > block)) {
             if (parentToken != 0) {
-                return SnapshotableToken(parentToken).balanceOfAt(_owner, min256(_blockNumber, parentSnapshotBlock));
+                return SnapshotableToken(parentToken).balanceOfAtCheckpoint(_owner, min256(_blockNumber, parentSnapshotBlock));
             } else {
                 // Has no parent
                 return 0;
@@ -394,15 +396,24 @@ contract SnapshotableToken is Controlled {
 
             // This will return the expected balance during normal situations
         } else {
-            return getValueAt(balances[_owner], _blockNumber);
+            return getValueAtCheckpoint(balances[_owner], _blockNumber);
         }
     }
 
-    /// @notice Total amount of tokens at a specific `_blockNumber`.
+    /// @notice Queries the total-supply value at a specific snapshotted block number
+    /// @param _snapshotBlockNumber The snapshotted block number at which the total supply is queried
+    /// @return The balance at `_snapshotBlockNumber`
+    function totalSupplyAtSnapshot(uint256 _snapshotBlockNumber) constant returns (uint256) {
+        require(isSnapshotBlock(_snapshotBlockNumber));
+        return balanceOfAtCheckpoint(0, _snapshotBlockNumber);
+    }
+
+    /// @notice Queries the checkpoint total-supply value at a specific `_blockNumber`.
+    ///   Only the snapshotted block numbers and recent block numbers after last snapshot are guaranteed to return correct value.
     /// @param _blockNumber The block number when the totalSupply is queried
     /// @return The total amount of tokens at `_blockNumber`
-    function totalSupplyAt(uint256 _blockNumber) constant returns (uint256) {
-        return balanceOfAt(0, _blockNumber);
+    function totalSupplyAtCheckpoint(uint256 _blockNumber) constant returns (uint256) {
+        return balanceOfAtCheckpoint(0, _blockNumber);
     }
 
     ////////////////
@@ -495,11 +506,12 @@ contract SnapshotableToken is Controlled {
     // Internal helper functions to query and set a value in a snapshot array
     ////////////////
 
-    /// @dev `getValueAt` retrieves the number of tokens at a given block number
+    /// @dev `getValueAtCheckpoint` retrieves the number of tokens at a given block number
+    ///   Only the snapshotted block numbers and recent block numbers after last snapshot are guaranteed to return correct value.
     /// @param checkpoints The history of values being queried
     /// @param _block The block number to retrieve the value at
     /// @return The number of tokens being queried
-    function getValueAt(Checkpoint[] storage checkpoints, uint256 _block) constant internal returns (uint256) {
+    function getValueAtCheckpoint(Checkpoint[] storage checkpoints, uint256 _block) constant internal returns (uint256) {
         if (checkpoints.length == 0) return 0;
 
         uint128 block = cast128(_block);
