@@ -541,7 +541,7 @@ contract SnapshotableToken is Controlled {
         } else {
             // overwrite last checkpoint
             Checkpoint storage oldCheckPoint = checkpoints[checkpoints.length - 1];
-            newCheckPoint.blockNum =  uint128(block.number);
+            oldCheckPoint.blockNum =  uint128(block.number);
             oldCheckPoint.value = value;
         }
     }
