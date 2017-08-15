@@ -152,13 +152,10 @@ contract SnapshotableToken is Controlled {
 
     /// @notice Constructor to create a SnapshotableToken
     /// @param _tokenFactory The address of the SnapshotableTokenFactory contract that
-    ///  will create the Clone token contracts, the token factory needs to be
-    ///  deployed first
-    /// @param _parentToken Address of the parent token, set to 0x0 if it is a
-    ///  new token
-    /// @param _parentSnapshotBlock Block of the parent token that will
-    ///  determine the initial distribution of the clone token, set to 0 if it
-    ///  is a new token
+    ///  will create the Clone token contracts, the token factory needs to be deployed first
+    /// @param _parentToken Address of the parent token, set to 0x0 if it is a new token
+    /// @param _parentSnapshotBlock Block number of the parent token that will determine
+    ///   the initial distribution of the clone token, set to 0 if it is a new token
     /// @param _tokenName Name of the new token
     /// @param _decimalUnits Number of decimals of the new token
     /// @param _tokenSymbol Token Symbol for the new token
