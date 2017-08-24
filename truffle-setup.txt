@@ -1,0 +1,30 @@
+
+## Truffle (Ethereum Smart Contract)
+truffle compile
+truffle compile --compile-all
+
+testrpc (@see test/testrpc.txt)
+
+truffle migrate --reset
+truffle migrate --compile-all
+
+truffle test
+
+# run geth with rpc server (with non-default port 8546) (default port number : 8545)
+$GETH_BIN/geth --testnet --cache=512 --rpc --rpcport 8546 --rpcapi "eth,net,web3" --rpccorsdomain "*" console
+# unlock account to execute transaction
+web3.personal.unlockAccount("0x42682ebbbd0d7a175f4d37c304fc931083db6d64", "<passs>", 20*60)
+
+truffle migrate --network ropsten
+
+# run geth with rpc server (with non-default port 8546) (default port number : 8545)
+$GETH/geth --rinkeby --cache=512 --rpc --rpcport 8547 --rpcapi "personal,db,eth,net,web3" --rpcaddr "0.0.0.0" --rpccorsdomain "*" console
+# unlock account to execute transaction
+web3.personal.unlockAccount("0x5677e23889387f0d0e774f2e930e91bcee9dcaa6", "<passs>", 20*60)
+
+truffle migrate --network rinkeby
+
+
+### truffle bug
+https://github.com/trufflesuite/truffle-contract/issues/5
+/usr/local/lib/node_modules/truffle/node_modules/truffle-contract/contract.js
