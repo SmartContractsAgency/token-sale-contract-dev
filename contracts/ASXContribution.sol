@@ -142,7 +142,7 @@ contract ASXContribution is Ownable, DSMath, TokenController{
 
     ) onlyOwner returns (bool success) {
         assert(address(ASX) == address(0));                                             // assert that the ASX token holding variable is empty
-        require(address(_asx.controller) == address(this));                             // require that the ASXContribution contract is the controller of the ASX token contract
+        require(_asx.controller() == address(this));                             // require that the ASXContribution contract is the controller of the ASX token contract
         require(_asx.totalSupply() == 0);                                               // require that the ASX token totalSupply is 0
         require(_initMinTarget > 0);                                                    // require the min initial target is greater than 0
         require(_initMaxTarget > _initMinTarget && _initMaxTarget < 10**26);            // require the max initial target is greater than the min target but less than the total current actual ETH supply (~ 100M ETH) decimal places
