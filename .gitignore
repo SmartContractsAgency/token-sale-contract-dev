@@ -56,4 +56,5 @@ npm-debug.log
 .webpack.json
 
 
-
+# Tuffle Migrations
+migrations/1_unlock_account.js
