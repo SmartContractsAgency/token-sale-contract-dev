@@ -224,14 +224,11 @@ contract ASXContribution is Ownable, DSMath, TokenController{
         Round storage round0 = rounds[0];
         if (roundCount == 0) {                                                      // Round 0 case
             avail = totalAllocation;                                                // in Round 0, available amount is simply totalAllocation
-            return avail;
         } else if (roundCount == 1) {                                                // case for Round 1
             avail = wsub(totalAllocation, round0.dist);                             // calculate the maximum available ASX in R1, A1 = (p1*S)-D0
-            return avail;
         } else {                                                                    // case for Round 2
             Round storage round1 = rounds[1];
             avail = wsub(wsub(totalAllocation, round1.dist), round0.dist);          // calculate the maximum available ASX in R2, A2 = (p2*S)-D1-D0
-            return avail;
         }
     }
 
@@ -279,7 +276,7 @@ contract ASXContribution is Ownable, DSMath, TokenController{
     * @return percent - the current round cumulative percent coefficient
     */
     function percentCoefficient(uint _roundCount) private constant returns (uint128 percent) {
-        percent = wadd(basePercentage, wmul(perRoundPercentage, cast(_roundCount)));   // calculate the cumulative percent coefficient
+        percent = wadd(basePercentage, hmul(perRoundPercentage, cast(_roundCount)));   // calculate the cumulative percent coefficient
         return percent;                                                                 // return percent coefficient
     }
 
