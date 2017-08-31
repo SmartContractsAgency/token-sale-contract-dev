@@ -323,10 +323,6 @@ contract ASXContribution is Ownable, DSMath, TokenController{
         assert(block.number >= uint(round.start) && block.number <= uint(round.end));                   // assert that the current block.number is within the block constraints of the current indexed round
         assert(msg.value >= 0.01 ether);                                                                // assert a contribution minimum of 0.01 ETH
 
-        if(roundIndex > 0 && round.cap == 0){                                                           // in all likelihood the previous round will have been finalized (thus producing the avail, threshold, and cap values for this round), but in case it hasn't been, finalize the previous round before continuing
-            finalizeRound(dssub(roundIndex,1));
-        }
-
         round.contrib[_contributor] = wadd(round.contrib[_contributor], cast(msg.value));               // cast msg.value as a uint128 and add it to the _contributor's contribution amount for this round
         round.totalContrib = wadd(round.totalContrib, cast(msg.value));                                 // add msg.value to the total contribution amount for this round
 
