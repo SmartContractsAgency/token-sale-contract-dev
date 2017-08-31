@@ -73,6 +73,7 @@ contract ASXContribution is Ownable, DSMath, TokenController{
     uint128 public thresholdCoefficient;        // the % change in threshold from one round to the next (t)
     uint128 public capCoefficient;              // the % of change in maximum contribution cap size from one round to the next (m)
     uint public roundCount;                     // the total number of rounds to be held
+    uint public roundIndex;                     // the index of the current contribution round
     bool initialized;                           // ASXContribution contract initialization flag
 
     event Init(uint _initMinTarget, uint _initMaxTarget, uint _thresholdCoefficient, uint _capCoefficient, uint _roundCount, uint[3][] _initRound); // ASXToken contract initialization log event
@@ -254,6 +255,7 @@ contract ASXContribution is Ownable, DSMath, TokenController{
         } else {                                                            // if it is the last round
             contributionEnd();                                              // call contributionEnd() to finalize the whole contribution period
         }
+        roundIndex += 1;                                                    // iterate the round index after the current round has been finalized
 
         RoundEnd(_roundIndex, uint(round.end), uint(round.totalContrib), uint(round.price), uint(round.dist));  // log round end event
 
@@ -331,9 +333,8 @@ contract ASXContribution is Ownable, DSMath, TokenController{
     * @return true
     */
     function contribute(address _contributor) private returns (bool success) {
-        uint roundIndex = getIndex(block.number);                                                       // get the current round index (if there is an active round, otherwise revert)
-        Round storage round = rounds[roundIndex];                                                       // get the current round info struct
-
+        Round storage round = rounds[roundIndex];                                                       // get the round info for the current roundIndex
+        assert(block.number >= uint(round.start) && block.number <= uint(round.end));                   // assert that the current block.number is within the block constraints of the current indexed round
         assert(msg.value >= 0.01 ether);                                                                // assert a contribution minimum of 0.01 ETH
 
         if(roundIndex > 0 && round.cap == 0){                                                           // in all likelihood the previous round will have been finalized (thus producing the avail, threshold, and cap values for this round), but in case it hasn't been, finalize the previous round before continuing
@@ -349,23 +350,6 @@ contract ASXContribution is Ownable, DSMath, TokenController{
 
         Contribution(roundIndex, msg.sender, msg.value);                                                // log the contribution event
         success = true;                                                                                 // return success
-    }
-
-    /**
-     * @dev - helper function to get the index of a round; will revert if _block_number is not within the start and end blocks of a round; only called at the time of contribution
-     * @param _block_number - the block.number of the contribution transaction
-     * @return index
-     */
-    function getIndex(uint _block_number) private returns (uint index) {
-        bool in_round;
-        for (uint i = 0; i < roundCount; i++) {
-            Round storage round = rounds[i];                                                // get each round info struct
-            if (_block_number >= uint(round.start) && _block_number <= uint(round.end)) {   // check if _block_number is within the block constraints of round i (it can only match one round ever)
-                in_round = true;                                                            // if found in a round then set in_round to true
-                index = i;                                                                  // and set index to i
-            }
-        }
-        assert(in_round = true);                                                            // assert that _block_number was in fact within some round constraints, if not revert
     }
 
     /**
