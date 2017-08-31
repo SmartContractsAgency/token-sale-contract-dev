@@ -200,10 +200,12 @@ contract ASXContribution is Ownable, DSMath, TokenController{
         assert(round.start == 0 || round.start > cast(block.number));       // assert that the round is either previously uninitialized or not already underway
         round.percentage = cast(_roundTargetPercent);                       // set the round target percent of _roundTargetPercent (store as uint128)
 
-        uint totalContributionPercentage;                                   // variable to represent the aggregate target percentage for the whole contribution period (including this round's newly set value)
+        uint totalContributionPeriodPercentage;                             // variable to represent the aggregate target percentage for the whole contribution period (including this round's newly set value)
         for (uint i = 0; i < roundCount; i++) {                             // for loop to get the aggregate contribution period target percentage amount
-            totalContributionPercentage += uint(rounds[i].percentage);      // aggregate the round percentages
+            totalContributionPeriodPercentage = dsadd(totalContributionPeriodPercentage, uint(rounds[i].percentage)); // aggregate the round percentages for the whole contribution period
         }
+        require(0 < totalContributionPeriodPercentage &&  totalContributionPeriodPercentage <= 10**18);  // require that the total target percentage to distribute in the entire contribution period is greater than 0 and less than(or equal to) 10**18 (WAD 100%)
+        require(0 < _roundTargetPercent && _roundTargetPercent <= totalContributionPeriodPercentage);    // require that individual round target percentages are greater than 0 and less than (or equal to) the total target percentage
 
         if (_roundIndex > 0) {                                              // for any round past index 0
             Round storage prevRound = rounds[dssub(_roundIndex,1)];         // get the previous Round struct info
@@ -221,9 +223,6 @@ contract ASXContribution is Ownable, DSMath, TokenController{
                 require(_roundEnd < nextRound.start);                       // require that the round end block is less than the next round start block
             }
         }
-
-        require(0 < totalContributionPercentage &&  totalContributionPercentage <= 10**18);        // require that the total target percentage to distribute in the entire contribution period is greater than 0 and less than(or equal to) 10**18 (WAD 100%)
-        require(0 < _roundTargetPercent && _roundTargetPercent <= totalContributionPercentage);    // require that individual round target percentages are greater than 0 and less than (or equal to) the total target percentage
 
         round.start = cast(_roundStart);                                    // set the start block of the initialized round to _roundStart (store as uint128)
         round.end = cast(_roundEnd);                                        // set the end block of the current round to _roundEnd (store as uint128)
