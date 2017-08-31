@@ -374,15 +374,7 @@ contract ASXContribution is Ownable, DSMath, TokenController{
     * @return true
     */
     function contributionEnd() private returns (bool success) {
-        uint128 totalContributions;                                             // total contributions
-        uint128 totalASXDistributed;                                            // total ASX distributed
-
-        for (uint i = 0; i < roundCount; i++) {                                 // iterate over each round; roundCount is one greater than the round index, so this will iterate up to the current final round.
-            Round storage round = rounds[i];                                    // get round i info
-            totalContributions += round.totalContrib;                           // add round contributions to the total contributions
-            totalASXDistributed += round.dist;                                  // add the round distribution to the total distribution
-        }
-        ContributionEnd(block.number, totalContributions, totalASXDistributed); // log the contribution end event
+        ContributionEnd(block.number, totalContribution, totalDistribution);   // log the contribution end event
         ASX.changeController(postContribController);                            // change ArtstockExchangeToken controller to the post contribution controller
         success = true;                                                         // return success
     }
