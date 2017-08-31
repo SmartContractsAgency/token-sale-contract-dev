@@ -192,9 +192,22 @@ contract ASXContribution is Ownable, DSMath, TokenController{
         require(_roundStart >= block.number);                               // require that the round start block is greater than (or equal to) the current block number
         require(_roundEnd > _roundStart);                                   // require that the round end block is greater than the round start block
 
+        Round storage round = rounds[_roundIndex];                          // get the virtually initialized (or previously initialized) Round struct for this _roundIndex
+        assert(round.start == 0 || round.start > cast(block.number));       // assert that the round is either previously uninitialized or not already underway
+        round.percentage = cast(_roundTargetPercent);                       // set the round target percent of _roundTargetPercent (store as uint128)
+
+        uint totalContributionPercentage;                                   // variable to represent the aggregate target percentage for the whole contribution period (including this round's newly set value)
+        for (uint i = 0; i < roundCount; i++) {                             // for loop to get the aggregate contribution period target percentage amount
+            totalContributionPercentage += uint(rounds[i].percentage);      // aggregate the round percentages
+        }
+
         if (_roundIndex > 0) {                                              // for any round past index 0
             Round storage prevRound = rounds[dssub(_roundIndex,1)];         // get the previous Round struct info
             require(_roundStart > prevRound.end);                           // require that the round start block is greater than the previous round end block
+        } else {                                                            // round 0 avail, threshold, and cap values can be calculated without previous round price and distribution information
+            round.avail = calcAvail(_roundIndex);                           // calculate the maximum available ASX for this round
+            round.threshold = calcThreshold(_roundIndex);                   // calculate the contribution threshold for this round
+            round.cap = calcCap(_roundIndex);                               // calculate the contribution cap for this round
         }
 
         uint lastIndex = dssub(roundCount,1);                               // the last possible round index number
@@ -205,24 +218,11 @@ contract ASXContribution is Ownable, DSMath, TokenController{
             }
         }
 
-        Round storage round = rounds[_roundIndex];                          // get the virtually initialized (or previously initialized) Round struct for this _roundIndex
-        assert(round.start == 0 || round.start > cast(block.number));       // assert that the round is either previously uninitialized or not already underway
-        round.percentage = cast(_roundTargetPercent);                       // set the round target percent of _roundTargetPercent (store as uint128)
-
-        uint totalContributionPercentage;                                   // variable to represent the aggregate target percentage for the whole contribution period (including this round's newly set value)
-        for (uint i = 0; i < roundCount; i++) {                             // for loop to get the aggregate contribution period target percentage amount
-            totalContributionPercentage += uint(rounds[i].percentage);      // aggregate the round percentages
-        }
         require(0 < totalContributionPercentage &&  totalContributionPercentage <= 10**18);        // require that the total target percentage to distribute in the entire contribution period is greater than 0 and less than(or equal to) 10**18 (WAD 100%)
         require(0 < _roundTargetPercent && _roundTargetPercent <= totalContributionPercentage);    // require that individual round target percentages are greater than 0 and less than (or equal to) the total target percentage
 
         round.start = cast(_roundStart);                                    // set the start block of the initialized round to _roundStart (store as uint128)
         round.end = cast(_roundEnd);                                        // set the end block of the current round to _roundEnd (store as uint128)
-
-
-        round.avail = calcAvail(_roundIndex);                               // calculate the maximum available ASX for this round
-        round.threshold = calcThreshold(_roundIndex);                       // calculate the contribution threshold for this round
-        round.cap = calcCap(_roundIndex);                                   // calculate the contribution cap for this round
 
         RoundInit(_roundIndex, _roundStart, _roundEnd, uint(round.avail), uint(round.threshold), uint(round.cap), uint(round.percentage));    // log the round initialization event
         success = true;                                                     // return success
@@ -244,11 +244,17 @@ contract ASXContribution is Ownable, DSMath, TokenController{
         round.price = wmax(wdiv(round.threshold, round.avail), wdiv(round.totalContrib, round.avail));          // update final price, P = max(T/A, C/A)
         round.dist = wmin(wmul(round.avail, wdiv(round.totalContrib, round.threshold)), round.avail);           // update final distribution, D = min(A*(C/T), A)
 
-        RoundEnd(_roundIndex, uint(round.end), uint(round.totalContrib), uint(round.price), uint(round.dist));  // log round end event
-
-        if(_roundIndex  == dssub(roundCount, 1)){                                                               // if this is the finalization of the the last indexed round                                                                                  // check for end of contribution at any round end, if it is the final round ending then fire contribution end
-            contributionEnd();                                                                                  // call contributionEnd() to finalize the whole contribution period
+        uint lastIndex = dssub(roundCount,1);                               // the last possible round index number
+        if (_roundIndex < lastIndex) {                                      // for any round before the last round
+            Round storage nextRound = rounds[dsadd(_roundIndex,1)];         // get the next Round struct info
+            nextRound.avail = calcAvail(_roundIndex);                       // calculate the maximum available ASX for the next round
+            nextRound.threshold = calcThreshold(_roundIndex);               // calculate the contribution threshold for the next round
+            nextRound.cap = calcCap(_roundIndex);                           // calculate the contribution cap for the next round
+        } else {                                                            // if it is the last round
+            contributionEnd();                                              // call contributionEnd() to finalize the whole contribution period
         }
+
+        RoundEnd(_roundIndex, uint(round.end), uint(round.totalContrib), uint(round.price), uint(round.dist));  // log round end event
 
         success = true;                                                                                         // return success
     }
