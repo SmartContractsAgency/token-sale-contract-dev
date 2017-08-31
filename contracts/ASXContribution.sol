@@ -246,10 +246,11 @@ contract ASXContribution is Ownable, DSMath, TokenController{
 
         uint lastIndex = dssub(roundCount,1);                               // the last possible round index number
         if (_roundIndex < lastIndex) {                                      // for any round before the last round
-            Round storage nextRound = rounds[dsadd(_roundIndex,1)];         // get the next Round struct info
-            nextRound.avail = calcAvail(_roundIndex);                       // calculate the maximum available ASX for the next round
-            nextRound.threshold = calcThreshold(_roundIndex);               // calculate the contribution threshold for the next round
-            nextRound.cap = calcCap(_roundIndex);                           // calculate the contribution cap for the next round
+            uint nextIndex = dsadd(_roundIndex,1);                          // index of the next round
+            Round storage nextRound = rounds[nextIndex];                    // get the next Round struct info
+            nextRound.avail = calcAvail(nextIndex);                         // calculate the maximum available ASX for the next round
+            nextRound.threshold = calcThreshold(nextIndex);                 // calculate the contribution threshold for the next round
+            nextRound.cap = calcCap(nextIndex);                             // calculate the contribution cap for the next round
         } else {                                                            // if it is the last round
             contributionEnd();                                              // call contributionEnd() to finalize the whole contribution period
         }
