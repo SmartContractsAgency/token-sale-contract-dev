@@ -79,7 +79,7 @@ contract ASXContribution is Ownable, DSMath, TokenController{
     uint128 public totalPercentage;             // tracks the current cumulative target percentage of ASX distribution
     bool initialized;                           // ASXContribution contract initialization flag
 
-    event Init(uint _initMinTarget, uint _initMaxTarget, uint _thresholdCoefficient, uint _capCoefficient, uint _roundCount, uint[3][] _initRound); // ASXToken contract initialization log event
+    event Init(uint _initSupply, uint _initMinTarget, uint _initMaxTarget, uint _thresholdCoefficient, uint _capCoefficient, uint _roundCount); // ASXToken contract initialization log event
 
     /* contribution round vars and logs */
 
@@ -129,7 +129,6 @@ contract ASXContribution is Ownable, DSMath, TokenController{
     * @param _thresholdCoefficient - used to calculate the % change in threshold from one round to the next, WAD formatted (10**18 is 100%)
     * @param _capCoefficient - used to calculate the % change in maximum contribution cap size from one round to the next in WAD format
     * @param _roundCount - the total number of rounds to be run over the whole contribution period
-    * @param _initRound - an array of initial round information for each contribution period round [start block, end block, target percentage of distribution]
     * @return success - true after successfully completing the contract initialization
     */
     function initialize(
@@ -138,8 +137,7 @@ contract ASXContribution is Ownable, DSMath, TokenController{
         uint _initMaxTarget,
         uint _thresholdCoefficient,
         uint _capCoefficient,
-        uint _roundCount,
-        uint[3][] _initRound
+        uint _roundCount
 
     ) onlyOwner returns (bool success) {
         assert(initialized == false);                                                   // assert that this contract has not yet been initialized for an ArtstockExchangeToken contract
@@ -150,11 +148,6 @@ contract ASXContribution is Ownable, DSMath, TokenController{
         require(_initMaxTarget > _initMinTarget && _initMaxTarget < 10**26);            // require the max initial target maximum is greater than the min target but less than the total current actual ETH supply decimal places (~ 100M ETH)
         require(_thresholdCoefficient >= 10**18);                                       // require the threshold coefficient is greater than(or equal to) 10**18 (WAD 100%) to ensure initial round prices start at or above previous rounds
         require(_capCoefficient >= _thresholdCoefficient && _capCoefficient < 10**19);  // require the cap coefficient is greater than(or equal to) the threshold coefficient and less than 10**19 (WAD 1000%)
-        require(_initRound.length == _roundCount);                                      // require that the number of round initialization entries are equal to the number of defined rounds
-
-        for (uint i = 0; i < _initRound.length; i++) {                                 // initialize each of the rounds with the start block, end block, and target percentage information
-            initializeRound(i, _initRound[i][0], _initRound[i][1], _initRound[i][2]);
-        }
 
         ASX = _asx;                                                                     // set the ASX contract variable to the ASX token contract
         ASX.generateTokens(address(this), initSupply);                                  // create ASX equal to initSupply and assign them to the ASXContribution contract address
@@ -171,7 +164,7 @@ contract ASXContribution is Ownable, DSMath, TokenController{
         roundCount = _roundCount;                                                       //
         initialized = true;                                                             // set the initialized variable to true, preventing any future initializations
 
-        Init(_initMinTarget, _initMaxTarget, _thresholdCoefficient, _capCoefficient, _roundCount, _initRound); // log the ArtStockContribution initialize event
+        Init(initSupply, _initMinTarget, _initMaxTarget, _thresholdCoefficient, _capCoefficient, _roundCount); // log the ArtStockContribution initialize event
         success = true;                                                                 // return success
     }
 
@@ -192,7 +185,7 @@ contract ASXContribution is Ownable, DSMath, TokenController{
     */
     function initializeRound(uint _roundIndex, uint _roundStart, uint _roundEnd, uint _roundTargetPercent) onlyOwner returns (bool success) {
         assert(initialized == true);                                        // assert that the ASXContribution contract has already been initialized
-        require(_roundIndex < roundCount);                                  // assert that the maximum number of initializable rounds is roundCount. roundIndex starts at 0, roundCount is the max _roundIndex + 1
+        require(_roundIndex < roundCount);                                  // require that the maximum number of initializable rounds is roundCount. _roundIndex starts at 0, roundCount is the max _roundIndex + 1
         require(_roundStart >= block.number);                               // require that the round start block is greater than (or equal to) the current block number
         require(_roundEnd > _roundStart);                                   // require that the round end block is greater than the round start block
 
@@ -209,15 +202,15 @@ contract ASXContribution is Ownable, DSMath, TokenController{
 
         if (_roundIndex > 0) {                                              // for any round past index 0
             Round storage prevRound = rounds[dssub(_roundIndex,1)];         // get the previous Round struct info
+            assert(prevRound.end != 0);                                     // assert that the previous round has been initialized (a non-zero end block has been assigned) before this round can be initialized
             require(_roundStart > prevRound.end);                           // require that the round start block is greater than the previous round end block
 
-            // must update round.avail here in the case where _roundTargetPercent is changed after finalization of the last round, but before the next round starts
-            if(_roundIndex == dsadd(roundIndex, 1)){
-                round.avail = wsub(wmul(wadd(totalPercentage, round.percentage), cast(initSupply)), totalDistribution);
+            if(_roundIndex == dsadd(roundIndex, 1) && prevRound.price != 0){ // if prevRound has been finalized (price != 0) and this very next round is being update after prev round finalization
+                round.avail = wsub(wmul(wadd(totalPercentage, round.percentage), cast(initSupply)), totalDistribution); // must update round.avail here in cases where _roundTargetPercent is changed after finalization of the last round
             }
 
         } else {                                                            // round 0 avail, threshold, and cap values can be calculated without previous round price and distribution information
-            round.avail = wmul(round.percentage, cast(initSupply));          // calculate the maximum available ASX for round 0
+            round.avail = wmul(round.percentage, cast(initSupply));         // calculate the maximum available ASX for round 0
             round.threshold = wmul(round.percentage, initMinTarget);        // calculate the contribution threshold for this round
             round.cap = wmul(round.percentage, initMaxTarget);              // calculate the contribution cap for this round
         }
