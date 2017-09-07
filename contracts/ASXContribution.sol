@@ -299,10 +299,10 @@ contract ASXContribution is Ownable, DSMath, TokenController{
         round.contrib[_contributor] += uint128(msg.value); // no overflow if totalContrib is not overflowed
 
         if (round.cap < round.totalContrib) {
-            uint refund = round.totalContrib - round.cap; // no overflow
+            uint128 refund = round.totalContrib - round.cap; // no overflow
             round.contrib[_contributor] -= refund; // no overflow
             round.totalContrib = round.cap;
-            msg.sender.transfer(refund); // throw on failure
+            msg.sender.transfer(uint256(refund)); // throw on failure
             return;
         }
 
