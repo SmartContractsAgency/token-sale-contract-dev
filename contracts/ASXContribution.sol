@@ -68,6 +68,7 @@ contract ASXContribution is Ownable, DSMath, TokenController{
     ArtstockExchangeToken public ASX;           // the ASX token
     uint public initSupply;                     // the initial/total supply fo ASX (S)
     address public postContribController;       // the contract which will be controller for the ArtstockExchangeToken contract after the contribution period (the postContrib controller will enforce the company holdings vesting period and circuit breakers)
+    address public fundReceiverWallet;          // the multisig wallet contract to gather and control contract ETH/ASX funds after the contribution period is finalized
     uint128 public initMinTarget;               // the initial minimum market cap of the total ASX supply (Imin)
     uint128 public initMaxTarget;               // the initial maximum market cap of the total ASX supply (Imax)
     uint128 public thresholdCoefficient;        // the % change in threshold from one round to the next (t)
@@ -79,7 +80,7 @@ contract ASXContribution is Ownable, DSMath, TokenController{
     uint128 public totalPercentage;             // tracks the current cumulative target percentage of ASX distribution
     bool initialized;                           // ASXContribution contract initialization flag
 
-    event Init(uint _initSupply, uint _initMinTarget, uint _initMaxTarget, uint _thresholdCoefficient, uint _capCoefficient, uint _roundCount); // ASXToken contract initialization log event
+    event Init(address _fundReceiverWallet, uint _initSupply, uint _initMinTarget, uint _initMaxTarget, uint _thresholdCoefficient, uint _capCoefficient, uint _roundCount); // ASXToken contract initialization log event
 
     /* contribution round vars and logs */
 
@@ -133,15 +134,17 @@ contract ASXContribution is Ownable, DSMath, TokenController{
     */
     function initialize(
         ArtstockExchangeToken _asx,
+        address _fundReceiverWallet,
         uint _initMinTarget,
         uint _initMaxTarget,
         uint _thresholdCoefficient,
         uint _capCoefficient,
         uint _roundCount
 
-    ) onlyOwner returns (bool success) {
+    ) onlyOwner {
         assert(initialized == false);                                                   // assert that this contract has not yet been initialized for an ArtstockExchangeToken contract
         assert(address(ASX) == address(0));                                             // assert that the ASX token holding variable is empty
+        require(_fundReceiverWallet != address(0x0));                                   // _fundReceiverWallet cannot be the 0x0 address
         require(_asx.controller() == address(this));                                    // require that the ASXContribution contract is the controller of the ASX token contract (must be set as the controller of the ArtstockExchangeToken contract before initialization here)
         require(_asx.totalSupply() == 0);                                               // require that the ASX token totalSupply is 0
         require(_initMinTarget > 0);                                                    // require the min initial target minimum is greater than 0
@@ -157,15 +160,15 @@ contract ASXContribution is Ownable, DSMath, TokenController{
           for 39 decimal positions (at ~ 3.4e+38). The above 'require' checks will prevent any overflow
           possibility for uint128 types
         */
-        initMinTarget = cast(_initMinTarget);                                           // setting initial storage variables
+        fundReceiverWallet = _fundReceiverWallet;                                       // setting initial storage variables
+        initMinTarget = cast(_initMinTarget);                                           //
         initMaxTarget = cast(_initMaxTarget);                                           //
         thresholdCoefficient = cast(_thresholdCoefficient);                             //
         capCoefficient = cast(_capCoefficient);                                         //
         roundCount = _roundCount;                                                       //
         initialized = true;                                                             // set the initialized variable to true, preventing any future initializations
 
-        Init(initSupply, _initMinTarget, _initMaxTarget, _thresholdCoefficient, _capCoefficient, _roundCount); // log the ArtStockContribution initialize event
-        success = true;                                                                 // return success
+        Init(fundReceiverWallet, initSupply, _initMinTarget, _initMaxTarget, _thresholdCoefficient, _capCoefficient, _roundCount); // log the ArtStockContribution initialize event
     }
 
     /**
@@ -183,7 +186,7 @@ contract ASXContribution is Ownable, DSMath, TokenController{
     * @param _roundTargetPercent - the target distribution percentage of the contribution round
     * @return success - true after successfully completing the round initialization
     */
-    function initializeRound(uint _roundIndex, uint _roundStart, uint _roundEnd, uint _roundTargetPercent) onlyOwner returns (bool success) {
+    function initializeRound(uint _roundIndex, uint _roundStart, uint _roundEnd, uint _roundTargetPercent) onlyOwner {
         assert(initialized == true);                                        // assert that the ASXContribution contract has already been initialized
         require(_roundIndex < roundCount);                                  // require that the maximum number of initializable rounds is roundCount. _roundIndex starts at 0, roundCount is the max _roundIndex + 1
         require(_roundStart >= block.number);                               // require that the round start block is greater than (or equal to) the current block number
@@ -229,7 +232,6 @@ contract ASXContribution is Ownable, DSMath, TokenController{
         round.end = cast(_roundEnd);                                        // set the end block of the current round to _roundEnd (store as uint128)
 
         RoundInit(_roundIndex, uint(round.start), uint(round.end), uint(round.percentage), uint(round.avail), uint(round.threshold), uint(round.cap));    // log the round initialization event
-        success = true;                                                     // return success
     }
 
     /**
@@ -237,7 +239,7 @@ contract ASXContribution is Ownable, DSMath, TokenController{
     * @param _roundIndex - the index of the round to be finalized
     * @return success - true after successfully completing the finalization
     */
-    function finalizeRound(uint _roundIndex) returns (bool success) {
+    function finalizeRound(uint _roundIndex) public {
         require(_roundIndex == roundIndex);                                                                     // require _roundIndex to equal roundIndex (only finalize the current round)
         Round storage round = rounds[_roundIndex];                                                              // get the round information for the chosen index
 
@@ -273,15 +275,13 @@ contract ASXContribution is Ownable, DSMath, TokenController{
 
         roundIndex = dsadd(roundIndex, 1);                                  // increment the round index after the current round has been finalized
         RoundEnd(_roundIndex, uint(round.end), uint(round.price), uint(round.totalContrib), uint(round.dist));  // log round end event
-
-        success = true;                                                                                         // return success
     }
 
     /**
     * @dev - public function to allow contribution to a current active round. If no round is active transaction will be reverted
     */
-    function contribute() payable returns (bool success) {
-        return contribute(msg.sender);          // return private contribute call success
+    function contribute() public payable {
+        contribute(msg.sender);          // return private contribute call success
     }
 
     /**
@@ -289,16 +289,29 @@ contract ASXContribution is Ownable, DSMath, TokenController{
     * @param _contributor - the address of the contributor who sent ETH for contribution
     * @return true
     */
-    function contribute(address _contributor) private returns (bool success) {
+    function contribute(address _contributor) private {
         Round storage round = rounds[roundIndex];                                                       // get the round info for the current roundIndex
         assert(block.number >= uint(round.start) && block.number <= uint(round.end));                   // assert that the current block.number is within the block constraints of the current indexed round
         require(msg.value >= 0.01 ether);                                                               // assert a contribution minimum of 0.01 ETH
 
-        round.contrib[_contributor] = wadd(round.contrib[_contributor], cast(msg.value));               // cast msg.value as a uint128 and add it to the _contributor's contribution amount for this round
-        round.totalContrib = wadd(round.totalContrib, cast(msg.value));                                 // add msg.value to the total contribution amount for this round
+        uint128 contribution;                                                                           // empty contribution variable
+        uint128 refund;                                                                                 // empty refund variable
+
+        if ( round.cap < wadd(round.totalContrib, cast(msg.value))) {                                   // enforce round cap
+            contribution = wsub(round.cap, round.totalContrib);                                         // if (round.totalContrib + msg.value) is greater than round.cap contribute only up to round.cap
+            refund = wsub(cast(msg.value), contribution);                                               // calculate any refund of ETH leftover after capped contribution
+        } else {
+            contribution = cast(msg.value);                                                             // cap not reached, full value contribution
+        }
+
+        round.contrib[_contributor] = wadd(round.contrib[_contributor], contribution);                  // add contribution to the _contributor's contribution amount for this round
+        round.totalContrib = wadd(round.totalContrib, contribution);                                    // add contribution to the total contribution amount for this round
+
+        if(refund != 0){                                                                                // check for refund
+            msg.sender.transfer(refund);                                                                // if there is a refund, transfer it back to msg.sender (no need to assert on this, failure of a transfer will revert https://ethereum.stackexchange.com/questions/21144/assert-and-require-atomicity-while-internally-calling-another-contract)
+        }
 
         Contribution(roundIndex, _contributor, msg.value);                                              // log the contribution event
-        success = true;                                                                                 // return success
     }
 
     /**
@@ -306,26 +319,25 @@ contract ASXContribution is Ownable, DSMath, TokenController{
     * @param _roundIndex - the round to claim ASX from
     * @return true
     */
-    function claim(uint _roundIndex) returns (bool success) {
+    function claim(uint _roundIndex) public {
         Round storage round = rounds[_roundIndex];                              // get the _round info struct
 
         if (round.claimed[msg.sender] != 0 || round.totalContrib == 0 || round.price == 0) { // check if msg.sender already claimed (any non-zero amount means a user has claimed); or price == 0 (this is only true when the round has not been finalized); or there is no contribution this round (any round not run yet will have 0 contribution)
-            return true;                                                        // hard return (not revert) because we could be iterating with claimAll
+            return;                                                             // hard return (not revert) because we could be iterating with claimAll
         }
 
         uint128 reward = wdiv(round.contrib[msg.sender], round.price);          // divide the user's total round contribution by the final round price to get the user's contribution reward
 
         round.claimed[msg.sender] = reward;                                     // change claimed amount of the sender (for this round) to the amount of the reward
-        ASX.transfer(msg.sender, uint(reward));                                 // transfer claimed reward to the sender
+        assert(ASX.transfer(msg.sender, uint(reward)));                         // transfer claimed reward to the sender (and assert that it returns true)
 
         Claim(_roundIndex, msg.sender, uint(reward));                           // log the claim event
-        success = true;                                                         // return success
     }
 
     /**
     * @dev - function to iterate over each round to claim rewards
     */
-    function claimAll() {
+    function claimAll() public {
         assert(roundIndex > 0);                             // unless roundIndex > 0, there have been no finalized rounds to claim yet
         for (uint i = 0; i < roundIndex; i++) {             // iterate over each round up to (but not including) the current roundIndex; this represents all finalized rounds
             claim(i);                                       // call claim() for each incremented round
@@ -336,28 +348,36 @@ contract ASXContribution is Ownable, DSMath, TokenController{
     * @dev - function finalize the contribution period which entails ceding control of the ArtstockExchangeToken contract to the post contribution controlling contract
     * @return true
     */
-    function contributionEnd() private returns (bool success) {
+    function contributionEnd() private {
         ASX.changeController(postContribController);                            // change ArtstockExchangeToken controller to the post contribution controller
         ContributionEnd(block.number, totalContribution, totalDistribution);    // log the contribution end event
-        success = true;                                                         // return success
+    }
+
+    /**
+     * @dev Allows the current owner to transfer the receiving address to a different multisig receiver
+     * @param _newReceiver - a new fund receiving address
+     */
+    function transferReceiver(address _newReceiver) onlyOwner {
+        require(_newReceiver != address(0));
+        fundReceiverWallet = _newReceiver;
     }
 
     /**
     * @dev - Artstock Exchange will collect all remaining ASX and contributed ETH after the last contribution period has ended
     * @return true - success after funds have been collected
     */
-    function collectFunds() onlyOwner returns (bool success) {
+    function collectFunds() onlyOwner {
         assert(roundIndex == roundCount);                           // assert that fund collection is only available after the last round has been finalized; this is so for two reasons:
                                                                     // i) to guarantee ETH recycling is impossible during the contribution period, and
                                                                     // ii) to guarantee that Artstock controlled ASX tokens are always subject to the postContribController contract vesting rules
 
         uint asxBalance = ASX.balanceOf(address(this));             // get the remaining ASX balance of the ASXContribution contract
 
-        ASX.transfer(msg.sender, asxBalance);                       // transfer all remaining ASX tokens to the authorized msg.sender
-        msg.sender.transfer(this.balance);                          // transfer all available ETH to the authorized msg.sender
+        assert(ASX.transfer(msg.sender, asxBalance));               // transfer all remaining ASX tokens to the authorized msg.sender
+
+        msg.sender.transfer(this.balance);                          // transfer all available ETH to the authorized msg.sender, (no need to assert on this, failure of a transfer will revert https://ethereum.stackexchange.com/questions/21144/assert-and-require-atomicity-while-internally-calling-another-contract)
 
         CollectFunds(this.balance, asxBalance);                     // log collect funds event
-        success = true;                                             // return success
     }
 
     /**
@@ -400,7 +420,7 @@ contract ASXContribution is Ownable, DSMath, TokenController{
     * @param _participant - the address of a contribution participant (using 0x0, or a non-participant address, will simply return the general contribution information)
     * @return roundInfo - an array for each round of the contribution
     */
-    function getContributionInfo(address _participant) constant returns (uint[11][]) {
+    function getContributionInfo(address _participant) public constant returns (uint[11][]) {
         uint[11][] memory roundInfo = new uint[11][](roundCount);       // empty array with entry for each round
         for (uint i = 0; i < roundCount; i++) {                         // iterate over each round of the contribution period (even those not yet finalized)
             Round storage round = rounds[i];                            // get round i info

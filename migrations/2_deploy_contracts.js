@@ -19,6 +19,7 @@ module.exports = function(deployer, network, accounts) {
 
     asxContribution = {
       address : '0xebf70c8443a14dd13cdf4997d13ba889945d1f31',
+      fundReceiverWallet: '0x0000000000000000000000000000000000000002',
       initSupply : web3.toWei('100000000','ether'),
       postContribController : '0x0000000000000000000000000000000000000001',
       initMinTarget : web3.toWei('312500','ether'),
@@ -104,6 +105,7 @@ module.exports = function(deployer, network, accounts) {
         if (err.message && err.message.includes('Cannot create instance of')) {
           console.log('Deploying new ASXContribution contract');
           return ASXContributionContract.new(asxContribution.initSupply, asxContribution.postContribController).then(function (newASXC) {
+            deployer.deploy(ASXContributionContract);
             console.log('Deployed new ASXContribution contract at ' + newASXC.address);
             console.log('Sending Transaction : ArtstockExchangeToken.changeController()');
             return t.changeController(newASXC.address).then(function (resCC) {
@@ -112,7 +114,7 @@ module.exports = function(deployer, network, accounts) {
                   console.log('ArtstockExchangeToken.changeController() Success!');
                   console.log('Sending Transaction : ASXContribution.initialize()');
                   return newASXC.initialize(
-                      t.address, asxContribution.initMinTarget, asxContribution.initMaxTarget,
+                      t.address, asxContribution.fundReceiverWallet, asxContribution.initMinTarget, asxContribution.initMaxTarget,
                       asxContribution.thresholdCoefficient, asxContribution.capCoefficient,
                       asxContribution.roundCount
                   ).then(function (resInit) {
@@ -167,6 +169,7 @@ module.exports = function(deployer, network, accounts) {
                       return null;
                     }
                   });
+
                 } else {
                   console.log('Mismatch for token controller address => ' + caddr + ' != ' + newASXC.address);
                   return Promise.resolve(null);
