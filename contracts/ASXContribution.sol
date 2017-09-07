@@ -373,9 +373,9 @@ contract ASXContribution is Ownable, DSMath, TokenController{
 
         uint asxBalance = ASX.balanceOf(address(this));             // get the remaining ASX balance of the ASXContribution contract
 
-        assert(ASX.transfer(msg.sender, asxBalance));               // transfer all remaining ASX tokens to the authorized msg.sender
+        assert(ASX.transfer(fundReceiverWallet, asxBalance));       // transfer all remaining ASX tokens to the authorized fundReceiverWallet
 
-        msg.sender.transfer(this.balance);                          // transfer all available ETH to the authorized msg.sender, (no need to assert on this, failure of a transfer will revert https://ethereum.stackexchange.com/questions/21144/assert-and-require-atomicity-while-internally-calling-another-contract)
+        fundReceiverWallet.transfer(this.balance);                  // transfer all available ETH to the authorized fundReceiverWallet, (no need to assert on this, failure of a transfer will revert https://ethereum.stackexchange.com/questions/21144/assert-and-require-atomicity-while-internally-calling-another-contract)
 
         CollectFunds(this.balance, asxBalance);                     // log collect funds event
     }

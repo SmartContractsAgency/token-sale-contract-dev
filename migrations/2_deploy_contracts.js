@@ -105,7 +105,6 @@ module.exports = function(deployer, network, accounts) {
         if (err.message && err.message.includes('Cannot create instance of')) {
           console.log('Deploying new ASXContribution contract');
           return ASXContributionContract.new(asxContribution.initSupply, asxContribution.postContribController).then(function (newASXC) {
-            deployer.deploy(ASXContributionContract);
             console.log('Deployed new ASXContribution contract at ' + newASXC.address);
             console.log('Sending Transaction : ArtstockExchangeToken.changeController()');
             return t.changeController(newASXC.address).then(function (resCC) {
