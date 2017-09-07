@@ -26,29 +26,72 @@ module.exports = function(deployer, network, accounts) {
       initMaxTarget : web3.toWei('1562500','ether'),
       thresholdCoefficient : web3.toWei('1.5','ether'),
       capCoefficient : web3.toWei('2','ether'),
-      roundCount : web3.toBigNumber('3').valueOf(),
+      roundCount : '3',
       roundZero : {
-        roundIndex : web3.toBigNumber('0').valueOf(),
-        startBlock : web3.toBigNumber('1000').valueOf(),
-        endBlock : web3.toBigNumber('2000').valueOf(),
+        roundIndex : '0',
+        startBlock : '1000',
+        endBlock : '2000',
         targetPercentage : web3.toWei('0.1','ether')
       },
       roundOne : {
-        roundIndex : web3.toBigNumber('1').valueOf(),
-        startBlock : web3.toBigNumber('3000').valueOf(),
-        endBlock : web3.toBigNumber('4000').valueOf(),
+        roundIndex : '1',
+        startBlock : '3000',
+        endBlock : '4000',
         targetPercentage : web3.toWei('0.05','ether')
       },
       roundTwo : {
-        roundIndex : web3.toBigNumber('2').valueOf(),
-        startBlock : web3.toBigNumber('5000').valueOf(),
-        endBlock : web3.toBigNumber('6000').valueOf(),
+        roundIndex : '2',
+        startBlock : '5000',
+        endBlock : '6000',
         targetPercentage : web3.toWei('0.05','ether')
       }
     };
   } else if (network == "ropsten") { // ropsten testnet
 
+    throw "error: deployment for ropsten network is not yet supported";
+
   } else if (network == "rinkeby") { // rinkeby testnet
+
+    snapshotableTokenFactory = {
+      address : '0x3e76b07d77adfca813bf50da1b83063775aca4b1'
+    };
+
+    asxToken = {
+      address : '0x00792284578fa9e08626feb5ff0ed727ecc2d005',
+      dividendDisburser : '0x5677e23889387f0d0e774f2e930e91bcee9dcaa6'
+    };
+
+    asxContribution = {
+      address : '0xef9322e611ac63b1797539d05454cf7f00c7f079',
+      fundReceiverWallet: '0x5677e23889387f0d0e774f2e930e91bcee9dcaa6',
+      initSupply : web3.toWei('100000000','ether'),
+      postContribController : '0x0000000000000000000000000000000000000001',
+      initMinTarget : web3.toWei('3.125','ether'),
+      initMaxTarget : web3.toWei('15.625','ether'),
+      thresholdCoefficient : web3.toWei('1.5','ether'),
+      capCoefficient : web3.toWei('2','ether'),
+      roundCount : '3',
+      // 1 hour : 24*60*(60/15) = 240 block
+      // 1 day : 24*60*(60/15) = 5760 block
+      roundZero : {
+        roundIndex : '0',
+        startBlock : '850115',
+        endBlock : '850415',
+        targetPercentage : web3.toWei('0.1','ether')
+      },
+      roundOne : {
+        roundIndex : '1',
+        startBlock : '850515',
+        endBlock : '850615',
+        targetPercentage : web3.toWei('0.05','ether')
+      },
+      roundTwo : {
+        roundIndex : '2',
+        startBlock : '850715',
+        endBlock : '850815',
+        targetPercentage : web3.toWei('0.05','ether')
+      }
+    };
 
   } else if (network == "live") {
     throw "error: deployment for live network is not yet supported";
