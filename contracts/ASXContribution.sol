@@ -293,22 +293,17 @@ contract ASXContribution is Ownable, DSMath, TokenController{
         Round storage round = rounds[roundIndex];                                                       // get the round info for the current roundIndex
         assert(block.number >= uint(round.start) && block.number <= uint(round.end));                   // assert that the current block.number is within the block constraints of the current indexed round
         require(msg.value >= 0.01 ether);                                                               // assert a contribution minimum of 0.01 ETH
+        require(round.totalContrib < round.cap);
 
-        uint128 contribution;                                                                           // empty contribution variable
-        uint128 refund;                                                                                 // empty refund variable
+        round.totalContrib = wadd(round.totalContrib, cast(msg.value));
+        round.contrib[_contributor] += uint128(msg.value); // no overflow if totalContrib is not overflowed
 
-        if ( round.cap < wadd(round.totalContrib, cast(msg.value))) {                                   // enforce round cap
-            contribution = wsub(round.cap, round.totalContrib);                                         // if (round.totalContrib + msg.value) is greater than round.cap contribute only up to round.cap
-            refund = wsub(cast(msg.value), contribution);                                               // calculate any refund of ETH leftover after capped contribution
-        } else {
-            contribution = cast(msg.value);                                                             // cap not reached, full value contribution
-        }
-
-        round.contrib[_contributor] = wadd(round.contrib[_contributor], contribution);                  // add contribution to the _contributor's contribution amount for this round
-        round.totalContrib = wadd(round.totalContrib, contribution);                                    // add contribution to the total contribution amount for this round
-
-        if(refund != 0){                                                                                // check for refund
-            msg.sender.transfer(refund);                                                                // if there is a refund, transfer it back to msg.sender (no need to assert on this, failure of a transfer will revert https://ethereum.stackexchange.com/questions/21144/assert-and-require-atomicity-while-internally-calling-another-contract)
+        if (round.cap < round.totalContrib) {
+            uint refund = round.totalContrib - round.cap; // no overflow
+            round.contrib[_contributor] -= refund; // no overflow
+            round.totalContrib = round.cap;
+            msg.sender.transfer(refund); // throw on failure
+            return;
         }
 
         Contribution(roundIndex, _contributor, msg.value);                                              // log the contribution event
