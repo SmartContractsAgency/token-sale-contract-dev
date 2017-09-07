@@ -17,8 +17,9 @@ web3.personal.unlockAccount("0x42682ebbbd0d7a175f4d37c304fc931083db6d64", "<pass
 
 truffle migrate --network ropsten
 
-# run geth with rpc server (with non-default port 8546) (default port number : 8545)
-$GETH/geth --rinkeby --cache=512 --rpc --rpcport 8547 --rpcapi "personal,db,eth,net,web3" --rpcaddr "0.0.0.0" --rpccorsdomain "*" console
+# [Rinkeby] run geth with rpc server (with non-default port 8547) (default port number : 8545)
+GETH=/path-to/go-ethereum-1.6.7/build/bin
+$GETH/geth --rinkeby --cache=512 --rpc --rpcport 8547 --rpcapi "personal,db,eth,net,web3" --rpcaddr "0.0.0.0" --rpccorsdomain "*" --txpool.nolocals --port=0 console
 # unlock account to execute transaction
 web3.personal.unlockAccount("0x5677e23889387f0d0e774f2e930e91bcee9dcaa6", "<passs>", 20*60)
 
