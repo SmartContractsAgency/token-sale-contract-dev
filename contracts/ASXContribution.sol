@@ -366,13 +366,13 @@ contract ASXContribution is Ownable, DSMath, TokenController{
                                                                     // i) to guarantee ETH recycling is impossible during the contribution period, and
                                                                     // ii) to guarantee that Artstock controlled ASX tokens are always subject to the postContribController contract vesting rules
 
-        uint asxBalance = ASX.balanceOf(address(this));             // get the remaining ASX balance of the ASXContribution contract
+        uint remainingBalance = initSupply - totalDistribution;     // get the remaining non-distribution allotment of ASX in the ASXContribution contract
 
-        assert(ASX.transfer(fundReceiverWallet, asxBalance));       // transfer all remaining ASX tokens to the authorized fundReceiverWallet
+        assert(ASX.transfer(fundReceiverWallet, remainingBalance));  // transfer all remaining ASX tokens to the authorized fundReceiverWallet
 
         fundReceiverWallet.transfer(this.balance);                  // transfer all available ETH to the authorized fundReceiverWallet, (no need to assert on this, failure of a transfer will revert https://ethereum.stackexchange.com/questions/21144/assert-and-require-atomicity-while-internally-calling-another-contract)
 
-        CollectFunds(this.balance, asxBalance);                     // log collect funds event
+        CollectFunds(this.balance, remainingBalance);               // log collect funds event
     }
 
     /**
