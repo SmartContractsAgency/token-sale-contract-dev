@@ -318,11 +318,12 @@ contract ASXContribution is Ownable, DSMath, TokenController{
     function claim(uint _roundIndex) public {
         Round storage round = rounds[_roundIndex];                              // get the _round info struct
 
-        if (round.claimed[msg.sender] != 0 || round.totalContrib == 0 || round.price == 0) { // check if msg.sender already claimed (any non-zero amount means a user has claimed); or price == 0 (this is only true when the round has not been finalized); or there is no contribution this round (any round not run yet will have 0 contribution)
+        uint128 contrib = round.contrib[msg.sender];
+        if (round.claimed[msg.sender] != 0 || contrib == 0 || round.totalContrib == 0 || round.price == 0) { // check if msg.sender already claimed (any non-zero amount means a user has claimed); or price == 0 (this is only true when the round has not been finalized); or there is no contribution this round (any round not run yet will have 0 contribution)
             return;                                                             // hard return (not revert) because we could be iterating with claimAll
         }
 
-        uint128 reward = wdiv_floor(round.contrib[msg.sender], round.price);          // divide the user's total round contribution by the final round price to get the user's contribution reward
+        uint128 reward = wdiv_floor(contrib, round.price);          // divide the user's total round contribution by the final round price to get the user's contribution reward
 
         round.claimed[msg.sender] = reward;                                     // change claimed amount of the sender (for this round) to the amount of the reward
         assert(ASX.transfer(msg.sender, uint(reward)));                         // transfer claimed reward to the sender (and assert that it returns true)
