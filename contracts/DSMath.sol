@@ -109,6 +109,10 @@ contract DSMath {
         z = cast((uint256(x) * WAD + y / 2) / y);
     }
 
+    function wdiv_floor(uint128 x, uint128 y) constant internal returns (uint128 z) {
+        z = cast((uint256(x) * WAD) / y);
+    }
+
     function wmin(uint128 x, uint128 y) constant internal returns (uint128) {
         return hmin(x, y);
     }

@@ -303,6 +303,7 @@ contract ASXContribution is Ownable, DSMath, TokenController{
             round.contrib[_contributor] -= refund; // no overflow
             round.totalContrib = round.cap;
             msg.sender.transfer(uint256(refund)); // throw on failure
+            Contribution(roundIndex, _contributor, msg.value - uint256(refund));
             return;
         }
 
@@ -321,7 +322,7 @@ contract ASXContribution is Ownable, DSMath, TokenController{
             return;                                                             // hard return (not revert) because we could be iterating with claimAll
         }
 
-        uint128 reward = wdiv(round.contrib[msg.sender], round.price);          // divide the user's total round contribution by the final round price to get the user's contribution reward
+        uint128 reward = wdiv_floor(round.contrib[msg.sender], round.price);          // divide the user's total round contribution by the final round price to get the user's contribution reward
 
         round.claimed[msg.sender] = reward;                                     // change claimed amount of the sender (for this round) to the amount of the reward
         assert(ASX.transfer(msg.sender, uint(reward)));                         // transfer claimed reward to the sender (and assert that it returns true)
