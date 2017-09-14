@@ -22,8 +22,8 @@ module.exports = function(deployer, network, accounts) {
       fundReceiverWallet: '0x0000000000000000000000000000000000000002',
       initSupply : web3.toWei('100000000','ether'),
       postContribController : '0x0000000000000000000000000000000000000001',
-      initMinTarget : web3.toWei('312500','ether'),
-      initMaxTarget : web3.toWei('1562500','ether'),
+      initMinTarget : web3.toWei('250000','ether'), // $100M at $400/ETH
+      initMaxTarget : web3.toWei('1250000','ether'), // $500M at $400/ETH
       thresholdCoefficient : web3.toWei('1.5','ether'),
       capCoefficient : web3.toWei('2','ether'),
       roundCount : '3',
@@ -53,42 +53,54 @@ module.exports = function(deployer, network, accounts) {
   } else if (network == "rinkeby") { // rinkeby testnet
 
     snapshotableTokenFactory = {
-      address : '0x3e76b07d77adfca813bf50da1b83063775aca4b1'
+      // address : '0xf99ded0eec1575ca9de64b8593c2241da925aa12'
+      // address : '0x342403360576ed23173f2ad3fc27e897d006ba25'
+      address : '0x1a1a0f93c26253bd42156b3afefd55e56ddc9da7'
     };
 
     asxToken = {
-      address : '0x00792284578fa9e08626feb5ff0ed727ecc2d005',
+      // address : '0x57396fd109ee084e50fa3a05c8e9f0a25fe66a8a',
+      // address : '0xdce383e3e2f0aa384fac28671c75d9fbb3cbe137',
+      address : '0xad5a397994568d2d35279d48797ed1f307188078',
       dividendDisburser : '0x5677e23889387f0d0e774f2e930e91bcee9dcaa6'
     };
 
     asxContribution = {
-      address : '0xef9322e611ac63b1797539d05454cf7f00c7f079',
+      // address : '0x2b58bb3c3c4900a536f89578c94fb7de6c5caf41',
+      // address : '0xcef5a351d54a3b0cd09b16332ff0c1e735d06580',
+      address : '0xf750edb6ea588279fd3e866ba30138d763d078b5',
       fundReceiverWallet: '0x5677e23889387f0d0e774f2e930e91bcee9dcaa6',
       initSupply : web3.toWei('100000000','ether'),
       postContribController : '0x0000000000000000000000000000000000000001',
-      initMinTarget : web3.toWei('3.125','ether'),
-      initMaxTarget : web3.toWei('15.625','ether'),
+      initMinTarget : web3.toWei('250','ether'),
+      initMaxTarget : web3.toWei('1250','ether'),
       thresholdCoefficient : web3.toWei('1.5','ether'),
       capCoefficient : web3.toWei('2','ether'),
       roundCount : '3',
-      // 1 hour : 24*60*(60/15) = 240 block
+      // 1 hour : 60*(60/15) = 240 block
       // 1 day : 24*60*(60/15) = 5760 block
       roundZero : {
         roundIndex : '0',
-        startBlock : '850115',
-        endBlock : '850415',
+        // startBlock : '855675', // SF 7 Sep Thursday 10PM
+        // endBlock : '857595', // SF 8 Sep Friday 6AM
+        startBlock : '859995', // SF 8 Sep Friday 4PM
+        endBlock : '860115', // SF 8 Sep Friday 4:30AM
         targetPercentage : web3.toWei('0.1','ether')
       },
       roundOne : {
         roundIndex : '1',
-        startBlock : '850515',
-        endBlock : '850615',
+        // startBlock : '858795', // SF 8 Sep Friday 11AM
+        // endBlock : '859995', // SF 8 Sep Friday 4PM
+        startBlock : '860175', // SF 8 Sep Friday 4:45M
+        endBlock : '860295', // SF 8 Sep Friday 5:15PM
         targetPercentage : web3.toWei('0.05','ether')
       },
       roundTwo : {
         roundIndex : '2',
-        startBlock : '850715',
-        endBlock : '850815',
+        // startBlock : '860235', // SF 8 Sep Friday 5PM
+        // endBlock : '860475', // SF 8 Sep Friday 6PM
+        startBlock : '860355', // SF 8 Sep Friday 5:30PM
+        endBlock : '860475', // SF 8 Sep Friday 6PM
         targetPercentage : web3.toWei('0.05','ether')
       }
     };
