@@ -94,7 +94,7 @@ contract ASXContribution is Ownable, DSMath, TokenController{
         uint128 avail;                          // the maximum allocation of ASX for distribution in the current round (A)
         uint128 threshold;                      // the contribution threshold each round (T)
         uint128 cap;                            // the contribution cap each round (M)
-        uint128 price;                          // the price of ASX/ETH for each round, (P)
+        uint128 price;                          // the price of ETH/ASX for each round, (P)
         uint128 dist;                           // the final distribution amount of ASX for each round (D)
         uint128 totalContrib;                   // the total contributions for each round (C)
         mapping (address => uint128) contrib;   // the total contributed amount for each address in each round
