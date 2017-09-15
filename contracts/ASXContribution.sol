@@ -210,9 +210,7 @@ contract ASXContribution is Ownable, DSMath, TokenController{
             // require that the round start block is greater than the previous round end block
 
             if (_roundIndex == roundIndex && prevRound.price != 0) {        // if prevRound has been finalized (price != 0) and the _roundIndex is the current roundIndex
-                round.avail = wsub(wmul(wadd(totalPercentage, roundPercent), uint128(initSupply)), totalDistribution); // must update round.avail in case _roundTargetPercent may have changed after finalization of the last round (_roundTargetPercent affects round.avail via roundPercent)
-                round.threshold = wmul(wmul(thresholdCoefficient, prevRound.price), round.avail);  // similarly re-calculate the contribution threshold for this round based on prevRound.price and any change to round.avail
-                round.cap = wmul(wmul(capCoefficient, prevRound.price), round.avail);              // re-calculate calculate the contribution cap for this round based on prevRound.price and any change to round.avail
+                calcNextRoundDist(round, roundPercent, prevRound.price);
             }
 
         } else {                                                            // round 0 avail, threshold, and cap values can be calculated without previous round price and distribution information
@@ -262,15 +260,20 @@ contract ASXContribution is Ownable, DSMath, TokenController{
             uint nextIndex = _roundIndex + 1;                          // index of the next round
             Round storage nextRound = rounds[nextIndex];                    // get the next Round struct info
             assert(nextRound.start != 0);                                   // be sure nextRound has been initialized to do the following calculations (because nextRound.percentage is required)
-            nextRound.avail = wsub(wmul(wadd(totalPercentage, nextRound.percentage), uint128(initSupply)), totalDistribution);  // calculate the maximum possible available ASX for the next round by adding totalPercentage and nextRound.percentage and multiply this sum by the intialSupply and finally subtracting the distributed tokens from previous rounds
-            nextRound.threshold = wmul(wmul(thresholdCoefficient, round.price), nextRound.avail);  // calculate the contribution threshold for the next round based on the current round.price
-            nextRound.cap = wmul(wmul(capCoefficient, round.price), nextRound.avail);              // calculate the contribution cap for the next round
+            calcNextRoundDist(nextRound, nextRound.percentage, round.price);
         } else {                                                            // if it is the last round
             contributionEnd();                                              // call contributionEnd() to finalize the whole contribution period
         }
 
         roundIndex += 1;                                  // increment the round index after the current round has been finalized
         RoundEnd(_roundIndex, uint(round.end), uint(round.price), uint(round.totalContrib), uint(round.dist));  // log round end event
+    }
+
+    function calcNextRoundDist(Round storage nextRound, uint128 nextRoundPercent, uint128 prevRoundPrice) private {
+        uint128 avail = wsub(wmul(wadd(totalPercentage, nextRoundPercent), uint128(initSupply)), totalDistribution); // must update round.avail in case _roundTargetPercent may have changed after finalization of the last round (_roundTargetPercent affects round.avail via roundPercent)
+        nextRound.avail = avail;
+        nextRound.threshold = wmul(wmul(thresholdCoefficient, prevRoundPrice), avail);  // similarly re-calculate the contribution threshold for this round based on prevRound.price and any change to round.avail
+        nextRound.cap = wmul(wmul(capCoefficient, prevRoundPrice), avail);              // re-calculate calculate the contribution cap for this round based on prevRound.price and any change to round.avail
     }
 
     /**
