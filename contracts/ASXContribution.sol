@@ -104,7 +104,7 @@ contract ASXContribution is Ownable, DSMath, TokenController{
     mapping (uint => Round) public rounds;   // map round number to round information
 
 
-    event RoundInit(uint _roundIndex, uint _roundStart, uint _roundEnd, uint _targetPercentage, uint _allocation, uint _threshold, uint _cap);                  // round initialization log event
+    event RoundInit(uint _roundIndex, uint _roundStart, uint _roundEnd, uint _targetPercentage);                  // round initialization log event
     event RoundEnd(uint _roundIndex, uint _endBlock, uint _finalPrice, uint _finalContributionTotal, uint _finalDistribution);          // round end log event
     event Contribution(uint _roundIndex, address _contributor, uint _amount);                                                           // contribution log event
     event Claim(uint _roundIndex, address _claimant, uint _amount);                                                                     // claiming log event
@@ -227,7 +227,7 @@ contract ASXContribution is Ownable, DSMath, TokenController{
         round.start = uint128(_roundStart);                                    // set the start block of the initialized round to _roundStart (store as uint128)
         round.end = uint128(_roundEnd);                                        // set the end block of the current round to _roundEnd (store as uint128)
 
-        RoundInit(_roundIndex, _roundStart, _roundEnd, uint(_roundTargetPercent), uint(round.avail), uint(round.threshold), uint(round.cap));    // log the round initialization event
+        RoundInit(_roundIndex, _roundStart, _roundEnd, uint(_roundTargetPercent));    // log the round initialization event
     }
 
     /**
