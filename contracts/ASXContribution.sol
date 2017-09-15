@@ -190,48 +190,46 @@ contract ASXContribution is Ownable, DSMath, TokenController{
         assert(initialized == true);                                        // assert that the ASXContribution contract has already been initialized
         require(_roundIndex < roundCount);                                  // require that the maximum number of initializable rounds is roundCount. _roundIndex starts at 0, roundCount is the max _roundIndex + 1
         require(_roundStart >= block.number);                               // require that the round start block is greater than (or equal to) the current block number
-        require(_roundEnd > _roundStart);                                   // require that the round end block is greater than the round start block
+        require(cast(_roundEnd) > cast(_roundStart));                                   // require that the round end block is greater than the round start block
+        require(_roundTargetPercent <= 10**18); // <= 100%
 
         Round storage round = rounds[_roundIndex];                          // get the virtually initialized (or previously initialized) Round struct for this _roundIndex
-        assert(round.start == 0 || round.start > cast(block.number));       // assert that the round is either previously uninitialized or not already underway
-        round.percentage = cast(_roundTargetPercent);                       // set the round target percent of _roundTargetPercent (store as uint128)
+        assert(round.start == 0 || round.start > uint128(block.number));       // assert that the round is either previously uninitialized or not already underway
+        uint128 roundPercent = uint128(_roundTargetPercent);
+        round.percentage = roundPercent;                       // set the round target percent of _roundTargetPercent (store as uint128)
 
         uint totalContributionPeriodPercentage;                             // variable to represent the aggregate target percentage for the whole contribution period (including this round's newly set value)
         for (uint i = 0; i < roundCount; i++) {                             // for loop to get the aggregate contribution period target percentage amount
-            totalContributionPeriodPercentage = dsadd(totalContributionPeriodPercentage, uint(rounds[i].percentage)); // aggregate the round percentages for the whole contribution period
+            totalContributionPeriodPercentage += uint(rounds[i].percentage); // aggregate the round percentages for the whole contribution period
         }
         require(0 < totalContributionPeriodPercentage &&  totalContributionPeriodPercentage <= 10**18);  // require that the total target percentage to distribute in the entire contribution period is greater than 0 and less than(or equal to) 10**18 (WAD 100%)
-        require(0 < _roundTargetPercent && _roundTargetPercent <= totalContributionPeriodPercentage);    // require that individual round target percentages are greater than 0 and less than (or equal to) the total target percentage
 
-        if (_roundIndex > 0) {                                              // for any round past index 0
-            Round storage prevRound = rounds[dssub(_roundIndex,1)];         // get the previous Round struct info
-            assert(prevRound.end != 0);                                     // assert that the previous round has been initialized (i.e., a non-zero end block has been assigned) before the current round can be initialized
-            require(_roundStart > prevRound.end);                           // require that the round start block is greater than the previous round end block
+        if (_roundIndex > 0) {                                              // not first round
+            Round storage prevRound = rounds[_roundIndex-1];         // get the previous Round struct info
+            assert(prevRound.end != 0 && _roundStart > prevRound.end);   // assert that the previous round has been initialized (i.e., a non-zero end block has been assigned) before the current round can be initialized
+            // require that the round start block is greater than the previous round end block
 
             if (_roundIndex == roundIndex && prevRound.price != 0) {        // if prevRound has been finalized (price != 0) and the _roundIndex is the current roundIndex
-                round.avail = wsub(wmul(wadd(totalPercentage, round.percentage), cast(initSupply)), totalDistribution); // must update round.avail in case _roundTargetPercent may have changed after finalization of the last round (_roundTargetPercent affects round.avail via round.percentage)
-                nextRound.threshold = wmul(wmul(thresholdCoefficient, prevRound.price), round.avail);  // similarly re-calculate the contribution threshold for this round based on prevRound.price and any change to round.avail
-                nextRound.cap = wmul(wmul(capCoefficient, prevRound.price), round.avail);              // re-calculate calculate the contribution cap for this round based on prevRound.price and any change to round.avail
+                round.avail = wsub(wmul(wadd(totalPercentage, roundPercent), uint128(initSupply)), totalDistribution); // must update round.avail in case _roundTargetPercent may have changed after finalization of the last round (_roundTargetPercent affects round.avail via roundPercent)
+                round.threshold = wmul(wmul(thresholdCoefficient, prevRound.price), round.avail);  // similarly re-calculate the contribution threshold for this round based on prevRound.price and any change to round.avail
+                round.cap = wmul(wmul(capCoefficient, prevRound.price), round.avail);              // re-calculate calculate the contribution cap for this round based on prevRound.price and any change to round.avail
             }
 
         } else {                                                            // round 0 avail, threshold, and cap values can be calculated without previous round price and distribution information
-            round.avail = wmul(round.percentage, cast(initSupply));         // calculate the maximum available ASX for round 0
-            round.threshold = wmul(round.percentage, initMinTarget);        // calculate the contribution threshold for this round
-            round.cap = wmul(round.percentage, initMaxTarget);              // calculate the contribution cap for this round
+            round.avail = wmul(roundPercent, uint128(initSupply));         // calculate the maximum available ASX for round 0
+            round.threshold = wmul(roundPercent, initMinTarget);        // calculate the contribution threshold for this round
+            round.cap = wmul(roundPercent, initMaxTarget);              // calculate the contribution cap for this round
         }
 
-        uint lastIndex = dssub(roundCount,1);                               // the last possible round index number
-        if (_roundIndex < lastIndex) {                                      // for any round before the last round
-            Round storage nextRound = rounds[dsadd(_roundIndex,1)];         // get the next Round struct info
-            if (nextRound.start != 0) {                                     // if the next round has already been explicitly initialized (if not explicitly initialized then any end block is fine)
-                require(_roundEnd < nextRound.start);                       // require that the round end block is less than the next round start block
-            }
+        if (_roundIndex < roundCount - 1) {                                      // for any round before the last round
+            Round storage nextRound = rounds[_roundIndex + 1];         // get the next Round struct info
+            assert(nextRound.start == 0 || uint128(_roundEnd) < nextRound.start); // require that the round end block is less than the next round start block
         }
 
-        round.start = cast(_roundStart);                                    // set the start block of the initialized round to _roundStart (store as uint128)
-        round.end = cast(_roundEnd);                                        // set the end block of the current round to _roundEnd (store as uint128)
+        round.start = uint128(_roundStart);                                    // set the start block of the initialized round to _roundStart (store as uint128)
+        round.end = uint128(_roundEnd);                                        // set the end block of the current round to _roundEnd (store as uint128)
 
-        RoundInit(_roundIndex, uint(round.start), uint(round.end), uint(round.percentage), uint(round.avail), uint(round.threshold), uint(round.cap));    // log the round initialization event
+        RoundInit(_roundIndex, _roundStart, _roundEnd, uint(_roundTargetPercent), uint(round.avail), uint(round.threshold), uint(round.cap));    // log the round initialization event
     }
 
     /**
@@ -260,20 +258,18 @@ contract ASXContribution is Ownable, DSMath, TokenController{
         totalDistribution = wadd(totalDistribution,round.dist);             // add the finalized round distribution amount to the running distribution period total
         totalPercentage = wadd(totalPercentage, round.percentage);          // add the round target percentage to the running target percentage total amount
 
-        uint lastIndex = dssub(roundCount,1);                               // the last possible round index number
-        if (_roundIndex < lastIndex) {                                      // for any round before the last round
-            uint nextIndex = dsadd(_roundIndex,1);                          // index of the next round
+        if (_roundIndex < roundCount - 1) {                                      // for any round before the last round
+            uint nextIndex = _roundIndex + 1;                          // index of the next round
             Round storage nextRound = rounds[nextIndex];                    // get the next Round struct info
-            if(nextRound.start != 0){                                       // be sure nextRound has been initialized to do the following calculations (because nextRound.percentage is required)
-                nextRound.avail = wsub(wmul(wadd(totalPercentage, nextRound.percentage), cast(initSupply)), totalDistribution);  // calculate the maximum possible available ASX for the next round by adding totalPercentage and nextRound.percentage and multiply this sum by the intialSupply and finally subtracting the distributed tokens from previous rounds
-                nextRound.threshold = wmul(wmul(thresholdCoefficient, round.price), nextRound.avail);  // calculate the contribution threshold for the next round based on the current round.price
-                nextRound.cap = wmul(wmul(capCoefficient, round.price), nextRound.avail);              // calculate the contribution cap for the next round
-            }
+            assert(nextRound.start != 0);                                   // be sure nextRound has been initialized to do the following calculations (because nextRound.percentage is required)
+            nextRound.avail = wsub(wmul(wadd(totalPercentage, nextRound.percentage), uint128(initSupply)), totalDistribution);  // calculate the maximum possible available ASX for the next round by adding totalPercentage and nextRound.percentage and multiply this sum by the intialSupply and finally subtracting the distributed tokens from previous rounds
+            nextRound.threshold = wmul(wmul(thresholdCoefficient, round.price), nextRound.avail);  // calculate the contribution threshold for the next round based on the current round.price
+            nextRound.cap = wmul(wmul(capCoefficient, round.price), nextRound.avail);              // calculate the contribution cap for the next round
         } else {                                                            // if it is the last round
             contributionEnd();                                              // call contributionEnd() to finalize the whole contribution period
         }
 
-        roundIndex = dsadd(roundIndex, 1);                                  // increment the round index after the current round has been finalized
+        roundIndex += 1;                                  // increment the round index after the current round has been finalized
         RoundEnd(_roundIndex, uint(round.end), uint(round.price), uint(round.totalContrib), uint(round.dist));  // log round end event
     }
 
