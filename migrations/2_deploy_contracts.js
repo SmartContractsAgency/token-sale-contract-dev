@@ -53,27 +53,33 @@ module.exports = function(deployer, network, accounts) {
   } else if (network == "rinkeby") { // rinkeby testnet
 
     snapshotableTokenFactory = {
-      // address : '0xf99ded0eec1575ca9de64b8593c2241da925aa12'
-      // address : '0x342403360576ed23173f2ad3fc27e897d006ba25'
-      address : '0x1a1a0f93c26253bd42156b3afefd55e56ddc9da7'
+      // address : '0xf99ded0eec1575ca9de64b8593c2241da925aa12' // test 0
+      // address : '0x342403360576ed23173f2ad3fc27e897d006ba25' // test 1
+      // address : '0x1a1a0f93c26253bd42156b3afefd55e56ddc9da7' // test 2
+      // address : '0xb918ae0fdb2811657dcde74f703005852767163a' // local test
+      address : '0xf8cfca23eca88114d7f4a598e2fd069adc3a00bf' // test 3
     };
 
     asxToken = {
-      // address : '0x57396fd109ee084e50fa3a05c8e9f0a25fe66a8a',
-      // address : '0xdce383e3e2f0aa384fac28671c75d9fbb3cbe137',
-      address : '0xad5a397994568d2d35279d48797ed1f307188078',
+      // address : '0x57396fd109ee084e50fa3a05c8e9f0a25fe66a8a', // test 0
+      // address : '0xdce383e3e2f0aa384fac28671c75d9fbb3cbe137', // test 1
+      // address : '0xad5a397994568d2d35279d48797ed1f307188078', // test 2
+      // address : '0xda87d271a0166386847d688d0dfacf29b9f8bb7b', // local test
+      address : '0x83b27d770ee4ac6b31b6f25131af6583ec92ab12', // test 3
       dividendDisburser : '0x5677e23889387f0d0e774f2e930e91bcee9dcaa6'
     };
 
     asxContribution = {
-      // address : '0x2b58bb3c3c4900a536f89578c94fb7de6c5caf41',
-      // address : '0xcef5a351d54a3b0cd09b16332ff0c1e735d06580',
-      address : '0xf750edb6ea588279fd3e866ba30138d763d078b5',
+      // address : '0x2b58bb3c3c4900a536f89578c94fb7de6c5caf41', // test 0
+      // address : '0xcef5a351d54a3b0cd09b16332ff0c1e735d06580', // test 1
+      // address : '0xf750edb6ea588279fd3e866ba30138d763d078b5', // test 2
+      // address : '0xb29ff097a8d9f260b00da4798d097be8908894cf', // local test
+      address : '0xe0d5313b91d55bb123709d999c894a245ea8d1c6', // test 3
       fundReceiverWallet: '0x5677e23889387f0d0e774f2e930e91bcee9dcaa6',
       initSupply : web3.toWei('100000000','ether'),
       postContribController : '0x0000000000000000000000000000000000000001',
-      initMinTarget : web3.toWei('250','ether'),
-      initMaxTarget : web3.toWei('1250','ether'),
+      initMinTarget : web3.toWei('40','ether'),
+      initMaxTarget : web3.toWei('200','ether'),
       thresholdCoefficient : web3.toWei('1.5','ether'),
       capCoefficient : web3.toWei('2','ether'),
       roundCount : '3',
@@ -81,26 +87,20 @@ module.exports = function(deployer, network, accounts) {
       // 1 day : 24*60*(60/15) = 5760 block
       roundZero : {
         roundIndex : '0',
-        // startBlock : '855675', // SF 7 Sep Thursday 10PM
-        // endBlock : '857595', // SF 8 Sep Friday 6AM
-        startBlock : '859995', // SF 8 Sep Friday 4PM
-        endBlock : '860115', // SF 8 Sep Friday 4:30AM
+        startBlock : '935445', // SF 21 Sep Thu 6:30PM
+        endBlock : '935505', // SF 21 Sep Thu 6:45PM
         targetPercentage : web3.toWei('0.1','ether')
       },
       roundOne : {
         roundIndex : '1',
-        // startBlock : '858795', // SF 8 Sep Friday 11AM
-        // endBlock : '859995', // SF 8 Sep Friday 4PM
-        startBlock : '860175', // SF 8 Sep Friday 4:45M
-        endBlock : '860295', // SF 8 Sep Friday 5:15PM
+        startBlock : '935545', // SF 21 Sep Thu 6:55AM
+        endBlock : '935605', // SF 21 Sep Thu 7:10AM
         targetPercentage : web3.toWei('0.05','ether')
       },
       roundTwo : {
         roundIndex : '2',
-        // startBlock : '860235', // SF 8 Sep Friday 5PM
-        // endBlock : '860475', // SF 8 Sep Friday 6PM
-        startBlock : '860355', // SF 8 Sep Friday 5:30PM
-        endBlock : '860475', // SF 8 Sep Friday 6PM
+        startBlock : '935645', // SF 21 Sep Thu 7:20AM
+        endBlock : '935705', // SF 21 Sep Thu 7:35AM
         targetPercentage : web3.toWei('0.05','ether')
       }
     };
@@ -204,17 +204,17 @@ module.exports = function(deployer, network, accounts) {
                                   console.log('ASXContribution.initializeRound() for Round 2 Success!');
 
                                 } else {
-                                  console.log(resInit);
+                                  console.log(resRnd2Init);
                                   return null;
                                 }
                               });
                             } else {
-                              console.log(resInit);
+                              console.log(resRnd1Init);
                               return null;
                             }
                           });
                         } else {
-                          console.log(resInit);
+                          console.log(resRnd0Init);
                           return null;
                         }
                       });
