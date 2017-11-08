@@ -11,9 +11,9 @@ contract ArtstockExchangeToken is SnapshotableDividendableToken {
         _tokenFactory,
         0x0,                    // no parent token
         0,                      // no snapshot block number from parent
-        "Artstock Exchange Token", // Token name
+        "YOS Test Token", // Token name
         18,                     // Decimals
-        "ASX",                  // Symbol
+        "YOS",                  // Symbol
         true,                   // Enable transfers
         _dividendDisburser,     // dividend-disburser multisig address
         2*365*24*60*60          // Dividend-Deactivate-TimeLimit : 2 years
